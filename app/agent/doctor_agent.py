@@ -1,25 +1,18 @@
 from groq import Groq
 
-from app.config import GROQ_API_KEY
-from app.agent.prompts import SYSTEM_PROMPT
+from app.core.config import GROQ_API_KEY
 
 client = Groq(api_key=GROQ_API_KEY)
 
 
-def ask_agent(message: str) -> str:
+class DoctorAgent:
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT,
-            },
-            {
-                "role": "user",
-                "content": message,
-            },
-        ],
-    )
+    def chat(self, messages):
 
-    return response.choices[0].message.content
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            temperature=0.3,
+        )
+
+        return response.choices[0].message.content
