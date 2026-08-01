@@ -44,3 +44,24 @@ class Appointment(Base):
         DateTime(timezone=True),
         server_default=func.now(),
     )
+
+class Doctor(Base):
+
+    __tablename__ = "doctors"
+
+    id = Column(Integer, primary_key=True)
+
+    name = Column(String(100), nullable=False)
+
+    specialization = Column(String(100))
+
+    consultation_fee = Column(Integer)
+
+    start_time = Column(Time)
+
+    end_time = Column(Time)
+
+    active = Column(
+        String,
+        default="YES",
+    )
