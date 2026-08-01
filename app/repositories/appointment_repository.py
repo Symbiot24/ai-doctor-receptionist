@@ -19,3 +19,23 @@ class AppointmentRepository:
         self.db.refresh(appointment)
 
         return appointment
+
+    def is_slot_available(
+        self,
+        doctor: str,
+        appointment_date,
+        appointment_time,
+    ):
+
+        appointment = (
+            self.db.query(Appointment)
+            .filter(
+                Appointment.doctor == doctor,
+                Appointment.appointment_date == appointment_date,
+                Appointment.appointment_time == appointment_time,
+                Appointment.status == "BOOKED",
+            )
+            .first()
+        )
+
+        return appointment is None

@@ -34,7 +34,11 @@ class Appointment(Base):
 
     appointment_time = Column(Time)
 
-    status = Column(String(20), default="Booked")
+    status = Column(
+        String,
+        default="BOOKED",
+        nullable=False,
+    )
 
     created_at = Column(
         DateTime(timezone=True),

@@ -1,6 +1,7 @@
 from app.state.booking_state import BookingState
 from app.state.state_manager import state_manager
 from app.flows.booking.validator import BookingValidator
+from datetime import datetime
 
 class BookingFlow:
 
@@ -131,10 +132,15 @@ class BookingFlow:
             if not valid:
                 return error
 
+            appointment_date = datetime.strptime(
+                message,
+                "%Y-%m-%d"
+            ).date()
+
             state_manager.save(
                 user_id,
                 "appointment_date",
-                message,
+                appointment_date,
             )
 
             state_manager.update_state(
@@ -151,10 +157,15 @@ class BookingFlow:
             if not valid:
                 return error
 
+            appointment_time = datetime.strptime(
+                message,
+                "%H:%M"
+            ).time()
+
             state_manager.save(
                 user_id,
                 "appointment_time",
-                message,
+                appointment_time,
             )
 
             state_manager.update_state(
@@ -192,8 +203,28 @@ class BookingFlow:
 
         service = AppointmentService(db)
 
+        available = service.check_availability(
+            session["data"]["doctor"],
+            session["data"]["appointment_date"],
+            session["data"]["appointment_time"],
+        )
+
+        if not available:
+
+            db.close()
+
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_TIME,
+            )
+
+            return (
+                "❌ This slot is already booked.\n\n"
+                "Please enter another appointment time."
+            )
+
         appointment = service.book(
-        session["data"]
+            session["data"]
         )
 
         db.close()

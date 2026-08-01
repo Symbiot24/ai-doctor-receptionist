@@ -12,3 +12,16 @@ class AppointmentService:
         return self.repository.create(
             appointment_data
         )
+
+    def check_availability(
+        self,
+        doctor,
+        appointment_date,
+        appointment_time,
+    ):
+
+        return self.repository.is_slot_available(
+            doctor,
+            appointment_date,
+            appointment_time,
+        )
