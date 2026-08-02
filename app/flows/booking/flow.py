@@ -1,11 +1,13 @@
 from datetime import datetime
-
+from app.services.slot_service import SlotService
 from app.database.db import SessionLocal
 from app.flows.booking.validator import BookingValidator
 from app.services.appointment_service import AppointmentService
 from app.services.doctor_service import DoctorService
 from app.state.booking_state import BookingState
+from app.telegram.keyboards import doctor_keyboard
 from app.state.state_manager import state_manager
+from app.telegram.keyboards import slot_keyboard
 
 
 class BookingFlow:
@@ -139,10 +141,17 @@ class BookingFlow:
                 for doctor in doctors
             )
 
+            db = SessionLocal()
+
+            doctor_service = DoctorService(db)
+
+            doctors = doctor_service.get_all()
+
+            db.close()
+
             return (
-                "👨‍⚕️ Available Doctors:\n\n"
-                f"{doctor_list}\n\n"
-                "Enter the doctor's name."
+                "👨‍⚕️ Please select a doctor:",
+                doctor_keyboard(doctors),
             )
 
         # ---------------- ASK DOCTOR ---------------- #
@@ -199,12 +208,33 @@ class BookingFlow:
                 appointment_date,
             )
 
+            db = SessionLocal()
+
+            slot_service = SlotService(db)
+
+            slots = slot_service.available_slots(
+                session["data"]["doctor"],
+                appointment_date,
+            )
+
+            db.close()
+
+            if not slots:
+
+                return (
+                    "❌ No slots available.\n"
+                    "Choose another date."
+                )
+
             state_manager.update_state(
                 user_id,
                 BookingState.ASK_TIME,
             )
 
-            return "⏰ Preferred appointment time? (HH:MM)"
+            return (
+                "🕒 Please select an available slot:",
+                slot_keyboard(slots),
+            )
 
         # ---------------- ASK TIME ---------------- #
 
@@ -294,3 +324,52 @@ class BookingFlow:
             )
 
         return "Something went wrong. Please try again."
+
+    def select_doctor(self, user_id: int, doctor_name: str):
+
+        state_manager.save(
+            user_id,
+            "doctor",
+            doctor_name,
+        )
+
+        state_manager.update_state(
+            user_id,
+            BookingState.ASK_DATE,
+        )
+
+        return "📅 Select your preferred appointment date (YYYY-MM-DD)."
+
+
+    def select_slot(self, user_id: int, slot: str):
+
+        appointment_time = datetime.strptime(
+            slot,
+            "%H:%M",
+        ).time()
+
+        state_manager.save(
+            user_id,
+            "appointment_time",
+            appointment_time,
+        )
+
+        state_manager.update_state(
+            user_id,
+            BookingState.CONFIRM,
+        )
+
+        data = state_manager.get(user_id)["data"]
+
+        return (
+            f"Please confirm your appointment:\n\n"
+            f"Name: {data['patient_name']}\n"
+            f"Phone: {data['phone']}\n"
+            f"Age: {data['age']}\n"
+            f"Gender: {data['gender']}\n"
+            f"Symptoms: {data['symptoms']}\n"
+            f"Doctor: {data['doctor']}\n"
+            f"Date: {data['appointment_date']}\n"
+            f"Time: {data['appointment_time']}\n\n"
+            "Reply YES to confirm."
+        )

@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.database.models import Appointment
@@ -13,9 +15,7 @@ class AppointmentRepository:
         appointment = Appointment(**appointment_data)
 
         self.db.add(appointment)
-
         self.db.commit()
-
         self.db.refresh(appointment)
 
         return appointment
@@ -39,3 +39,24 @@ class AppointmentRepository:
         )
 
         return appointment is None
+
+    def get_booked_slots(
+        self,
+        doctor: str,
+        appointment_date: date,
+    ):
+
+        appointments = (
+            self.db.query(Appointment)
+            .filter(
+                Appointment.doctor == doctor,
+                Appointment.appointment_date == appointment_date,
+                Appointment.status == "BOOKED",
+            )
+            .all()
+        )
+
+        return [
+            appointment.appointment_time
+            for appointment in appointments
+        ]
