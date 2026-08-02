@@ -6,6 +6,7 @@ class Intent(str, Enum):
     CANCEL = "cancel"
     RESCHEDULE = "reschedule"
     GENERAL = "general"
+    MY_APPOINTMENTS = "my_appointments"
 
 
 class IntentRouter:
@@ -29,10 +30,19 @@ class IntentRouter:
         "shift",
     ]
 
+    MY_KEYWORDS = [
+        "my appointments",
+        "appointments",
+        "my booking",
+    ]
+
     @staticmethod
     def detect(message: str) -> Intent:
 
         text = message.lower()
+
+        if any(word in text for word in IntentRouter.MY_KEYWORDS):
+            return Intent.MY_APPOINTMENTS
 
         if any(word in text for word in IntentRouter.CANCEL_KEYWORDS):
             return Intent.CANCEL

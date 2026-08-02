@@ -25,3 +25,51 @@ class AppointmentService:
             appointment_date,
             appointment_time,
         )
+
+    def my_appointments(
+        self,
+        telegram_id,
+    ):
+
+        return self.repository.get_by_user(
+            telegram_id
+        )
+
+
+    def cancel(
+        self,
+        appointment_id,
+    ):
+
+        appointment = self.repository.get_by_id(
+            appointment_id
+        )
+
+        if appointment is None:
+
+            return None
+
+        return self.repository.cancel(
+            appointment
+        )
+
+    def cancel_by_user(
+        self,
+        appointment_id: int,
+        telegram_id: str,
+    ):
+
+        appointment = self.repository.get_by_id_and_user(
+            appointment_id,
+            telegram_id,
+        )
+
+        if appointment is None:
+
+            return False
+
+        appointment.status = "CANCELLED"
+
+        self.repository.db.commit()
+
+        return True

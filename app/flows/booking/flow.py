@@ -310,6 +310,8 @@ class BookingFlow:
                     "Please enter another appointment time."
                 )
 
+            session["data"]["telegram_id"] = str(user_id)
+
             appointment = service.book(
                 session["data"]
             )

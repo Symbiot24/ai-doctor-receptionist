@@ -60,3 +60,61 @@ class AppointmentRepository:
             appointment.appointment_time
             for appointment in appointments
         ]
+
+    def get_by_user(
+        self,
+        telegram_id: str,
+    ):
+
+        return (
+            self.db.query(Appointment)
+            .filter(
+                Appointment.telegram_id == telegram_id,
+                Appointment.status == "BOOKED",
+            )
+            .order_by(
+                Appointment.appointment_date
+            )
+            .all()
+        )
+
+
+    def get_by_id(
+        self,
+        appointment_id: int,
+    ):
+
+        return (
+            self.db.query(Appointment)
+            .filter(
+                Appointment.id == appointment_id
+            )
+            .first()
+        )
+
+
+    def cancel(
+        self,
+        appointment,
+    ):
+
+        appointment.status = "CANCELLED"
+
+        self.db.commit()
+
+        return appointment
+
+    def get_by_id_and_user(
+        self,
+        appointment_id: int,
+        telegram_id: str,
+    ):
+
+        return (
+            self.db.query(Appointment)
+            .filter(
+                Appointment.id == appointment_id,
+                Appointment.telegram_id == telegram_id,
+            )
+            .first()
+        )

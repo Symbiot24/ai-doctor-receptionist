@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-
+from app.database.db import SessionLocal
+from app.services.appointment_service import AppointmentService
 from app.flows.booking.flow import BookingFlow
 
 booking_flow = BookingFlow()
@@ -60,5 +61,36 @@ async def callback_handler(
         else:
 
             await query.edit_message_text(reply)
+
+        return
+
+    if data.startswith("cancel:"):
+
+        appointment_id = int(
+            data.split(":")[1]
+        )
+
+        db = SessionLocal()
+
+        service = AppointmentService(db)
+
+        cancelled = service.cancel_by_user(
+            appointment_id,
+            str(user_id),
+        )
+
+        db.close()
+
+        if cancelled:
+
+            await query.edit_message_text(
+                "✅ Appointment cancelled successfully."
+            )
+
+        else:
+
+            await query.edit_message_text(
+                "❌ Appointment not found."
+            )
 
         return
