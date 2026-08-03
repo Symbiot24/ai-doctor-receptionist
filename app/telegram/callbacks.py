@@ -1,5 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
+
 from app.database.db import SessionLocal
 from app.services.appointment_service import AppointmentService
 from app.flows.booking.flow import BookingFlow
@@ -23,7 +24,9 @@ async def callback_handler(
 
     data = query.data
 
-    # ---------------- Doctor Selection ---------------- #
+    # --------------------------------------------------
+    # Doctor Selection
+    # --------------------------------------------------
 
     if data.startswith("doctor:"):
 
@@ -38,7 +41,9 @@ async def callback_handler(
 
         return
 
-    # ---------------- Slot Selection ---------------- #
+    # --------------------------------------------------
+    # Slot Selection
+    # --------------------------------------------------
 
     if data.startswith("slot:"):
 
@@ -64,33 +69,50 @@ async def callback_handler(
 
         return
 
+    # --------------------------------------------------
+    # Cancel Appointment
+    # --------------------------------------------------
+
     if data.startswith("cancel:"):
 
         appointment_id = int(
-            data.split(":")[1]
+            data.split(":", 1)[1]
         )
 
         db = SessionLocal()
 
-        service = AppointmentService(db)
+        try:
 
-        cancelled = service.cancel_by_user(
-            appointment_id,
-            str(user_id),
-        )
+            service = AppointmentService(db)
 
-        db.close()
-
-        if cancelled:
-
-            await query.edit_message_text(
-                "✅ Appointment cancelled successfully."
+            appointment = service.cancel(
+                appointment_id
             )
 
-        else:
+            if appointment is None:
+
+                await query.edit_message_text(
+                    "❌ Appointment not found."
+                )
+
+                return
 
             await query.edit_message_text(
-                "❌ Appointment not found."
+                f"""
+✅ Appointment Cancelled Successfully
+
+👨‍⚕️ Doctor: {appointment.doctor}
+
+📅 Date: {appointment.appointment_date}
+
+🕒 Time: {appointment.appointment_time.strftime('%H:%M')}
+
+📌 Status: {appointment.status}
+"""
             )
+
+        finally:
+
+            db.close()
 
         return

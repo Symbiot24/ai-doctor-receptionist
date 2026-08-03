@@ -73,3 +73,9 @@ class AppointmentService:
         self.repository.db.commit()
 
         return True
+
+    def cancel(self, appointment_id):
+
+        return self.repository.cancel(
+            appointment_id
+        )

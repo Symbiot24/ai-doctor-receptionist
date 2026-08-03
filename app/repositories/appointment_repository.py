@@ -118,3 +118,34 @@ class AppointmentRepository:
             )
             .first()
         )
+
+    def get_by_id(self, appointment_id):
+
+        return (
+            self.db.query(Appointment)
+            .filter(
+                Appointment.id == appointment_id
+            )
+            .first()
+        )
+
+
+    def cancel(self, appointment_id):
+
+        appointment = self.get_by_id(
+            appointment_id
+        )
+
+        if appointment is None:
+            return None
+
+        if appointment.status == "CANCELLED":
+            return appointment
+
+        appointment.status = "CANCELLED"
+
+        self.db.commit()
+
+        self.db.refresh(appointment)
+
+        return appointment
