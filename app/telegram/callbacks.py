@@ -4,6 +4,8 @@ from telegram.ext import ContextTypes
 from app.database.db import SessionLocal
 from app.services.appointment_service import AppointmentService
 from app.flows.booking.flow import BookingFlow
+from app.state.state_manager import state_manager
+from app.state.booking_state import BookingState
 
 booking_flow = BookingFlow()
 
@@ -49,10 +51,21 @@ async def callback_handler(
 
         slot = data.split(":", 1)[1]
 
-        reply = booking_flow.select_slot(
-            user_id,
-            slot,
-        )
+        session = state_manager.get(user_id)
+
+        if session["state"] == BookingState.ASK_RESCHEDULE_SLOT:
+
+            reply = booking_flow.select_reschedule_slot(
+                user_id,
+                slot,
+            )
+
+        else:
+
+            reply = booking_flow.select_slot(
+                user_id,
+                slot,
+            )
 
         if isinstance(reply, tuple):
 
@@ -75,9 +88,7 @@ async def callback_handler(
 
     if data.startswith("cancel:"):
 
-        appointment_id = int(
-            data.split(":", 1)[1]
-        )
+        appointment_id = data.split(":", 1)[1]
 
         db = SessionLocal()
 
@@ -86,7 +97,7 @@ async def callback_handler(
             service = AppointmentService(db)
 
             appointment = service.cancel(
-                appointment_id
+                appointment_id,
             )
 
             if appointment is None:
@@ -114,5 +125,22 @@ async def callback_handler(
         finally:
 
             db.close()
+
+        return
+
+    # --------------------------------------------------
+    # Reschedule Appointment
+    # --------------------------------------------------
+
+    if data.startswith("reschedule:"):
+
+        appointment_id = data.split(":", 1)[1]
+
+        reply = booking_flow.start_reschedule(
+            user_id,
+            appointment_id,
+        )
+
+        await query.edit_message_text(reply)
 
         return

@@ -8,17 +8,27 @@ from app.database.models import Appointment
 class AppointmentRepository:
 
     def __init__(self, db: Session):
+
         self.db = db
 
-    def create(self, appointment_data: dict):
+    # ---------------- Create ---------------- #
+
+    def create(
+        self,
+        appointment_data: dict,
+    ):
 
         appointment = Appointment(**appointment_data)
 
         self.db.add(appointment)
+
         self.db.commit()
+
         self.db.refresh(appointment)
 
         return appointment
+
+    # ---------------- Availability ---------------- #
 
     def is_slot_available(
         self,
@@ -61,6 +71,8 @@ class AppointmentRepository:
             for appointment in appointments
         ]
 
+    # ---------------- Queries ---------------- #
+
     def get_by_user(
         self,
         telegram_id: str,
@@ -73,41 +85,29 @@ class AppointmentRepository:
                 Appointment.status == "BOOKED",
             )
             .order_by(
-                Appointment.appointment_date
+                Appointment.appointment_date,
+                Appointment.appointment_time,
             )
             .all()
         )
 
-
     def get_by_id(
         self,
-        appointment_id: int,
+        appointment_id,
     ):
 
         return (
             self.db.query(Appointment)
             .filter(
-                Appointment.id == appointment_id
+                Appointment.id == appointment_id,
             )
             .first()
         )
 
-
-    def cancel(
-        self,
-        appointment,
-    ):
-
-        appointment.status = "CANCELLED"
-
-        self.db.commit()
-
-        return appointment
-
     def get_by_id_and_user(
         self,
-        appointment_id: int,
-        telegram_id: str,
+        appointment_id,
+        telegram_id,
     ):
 
         return (
@@ -119,22 +119,12 @@ class AppointmentRepository:
             .first()
         )
 
-    def get_by_id(self, appointment_id):
+    # ---------------- Cancel ---------------- #
 
-        return (
-            self.db.query(Appointment)
-            .filter(
-                Appointment.id == appointment_id
-            )
-            .first()
-        )
-
-
-    def cancel(self, appointment_id):
-
-        appointment = self.get_by_id(
-            appointment_id
-        )
+    def cancel(
+        self,
+        appointment,
+    ):
 
         if appointment is None:
             return None
@@ -143,6 +133,25 @@ class AppointmentRepository:
             return appointment
 
         appointment.status = "CANCELLED"
+
+        self.db.commit()
+
+        self.db.refresh(appointment)
+
+        return appointment
+
+    # ---------------- Reschedule ---------------- #
+
+    def reschedule(
+        self,
+        appointment,
+        appointment_date,
+        appointment_time,
+    ):
+
+        appointment.appointment_date = appointment_date
+
+        appointment.appointment_time = appointment_time
 
         self.db.commit()
 

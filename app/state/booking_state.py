@@ -24,3 +24,7 @@ class BookingState(str, Enum):
     CONFIRM = "confirm"
 
     COMPLETE = "complete"
+
+    ASK_RESCHEDULE_DATE = "ASK_RESCHEDULE_DATE"
+
+    ASK_RESCHEDULE_SLOT = "ASK_RESCHEDULE_SLOT"

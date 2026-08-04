@@ -7,11 +7,18 @@ class AppointmentService:
 
         self.repository = AppointmentRepository(db)
 
-    def book(self, appointment_data):
+    # ---------------- Booking ---------------- #
+
+    def book(
+        self,
+        appointment_data,
+    ):
 
         return self.repository.create(
             appointment_data
         )
+
+    # ---------------- Availability ---------------- #
 
     def check_availability(
         self,
@@ -26,6 +33,8 @@ class AppointmentService:
             appointment_time,
         )
 
+    # ---------------- My Appointments ---------------- #
+
     def my_appointments(
         self,
         telegram_id,
@@ -35,6 +44,18 @@ class AppointmentService:
             telegram_id
         )
 
+    # ---------------- Get Appointment ---------------- #
+
+    def get_by_id(
+        self,
+        appointment_id,
+    ):
+
+        return self.repository.get_by_id(
+            appointment_id
+        )
+
+    # ---------------- Cancel ---------------- #
 
     def cancel(
         self,
@@ -46,7 +67,6 @@ class AppointmentService:
         )
 
         if appointment is None:
-
             return None
 
         return self.repository.cancel(
@@ -55,8 +75,8 @@ class AppointmentService:
 
     def cancel_by_user(
         self,
-        appointment_id: int,
-        telegram_id: str,
+        appointment_id,
+        telegram_id,
     ):
 
         appointment = self.repository.get_by_id_and_user(
@@ -65,17 +85,34 @@ class AppointmentService:
         )
 
         if appointment is None:
-
             return False
 
         appointment.status = "CANCELLED"
 
         self.repository.db.commit()
 
-        return True
+        self.repository.db.refresh(appointment)
 
-    def cancel(self, appointment_id):
+        return appointment
 
-        return self.repository.cancel(
+    # ---------------- Reschedule ---------------- #
+
+    def reschedule(
+        self,
+        appointment_id,
+        appointment_date,
+        appointment_time,
+    ):
+
+        appointment = self.repository.get_by_id(
             appointment_id
+        )
+
+        if appointment is None:
+            return None
+
+        return self.repository.reschedule(
+            appointment,
+            appointment_date,
+            appointment_time,
         )

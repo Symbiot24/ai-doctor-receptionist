@@ -136,19 +136,6 @@ class BookingFlow:
 
             db.close()
 
-            doctor_list = "\n".join(
-                f"• {doctor.name} ({doctor.specialization})"
-                for doctor in doctors
-            )
-
-            db = SessionLocal()
-
-            doctor_service = DoctorService(db)
-
-            doctors = doctor_service.get_all()
-
-            db.close()
-
             return (
                 "👨‍⚕️ Please select a doctor:",
                 doctor_keyboard(doctors),
@@ -187,6 +174,75 @@ class BookingFlow:
             )
 
             return "📅 Preferred appointment date? (YYYY-MM-DD)"
+
+
+        # ---------------- RESCHEDULE DATE ---------------- #
+
+        if state == BookingState.ASK_RESCHEDULE_DATE:
+
+            valid, error = BookingValidator.validate_date(message)
+
+            if not valid:
+                return error
+
+            appointment_date = datetime.strptime(
+                message,
+                "%Y-%m-%d",
+            ).date()
+
+            state_manager.save(
+                user_id,
+                "appointment_date",
+                appointment_date,
+            )
+
+            db = SessionLocal()
+
+            appointment_service = AppointmentService(db)
+
+            appointment = appointment_service.get_by_id(
+                session["data"]["appointment_id"]
+            )
+
+            if appointment is None or str(appointment.telegram_id) != str(user_id):
+
+                db.close()
+
+                state_manager.reset(user_id)
+
+                return "❌ Appointment not found or access denied."
+
+            state_manager.save(
+                user_id,
+                "doctor",
+                appointment.doctor,
+            )
+
+            slot_service = SlotService(db)
+
+            slots = slot_service.available_slots(
+                appointment.doctor,
+                appointment_date,
+            )
+
+            db.close()
+
+            if not slots:
+
+                return (
+                    "❌ No slots available.\n\n"
+                    "Please choose another date."
+                )
+
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_RESCHEDULE_SLOT,
+            )
+
+            return (
+                "🕒 Select a new slot:",
+                slot_keyboard(slots),
+            )
 
         # ---------------- ASK DATE ---------------- #
 
@@ -374,4 +430,77 @@ class BookingFlow:
             f"Date: {data['appointment_date']}\n"
             f"Time: {data['appointment_time']}\n\n"
             "Reply YES to confirm."
+        )
+
+    def start_reschedule(
+        self,
+        user_id: int,
+        appointment_id: str,
+    ):
+
+        session = state_manager.get(user_id)
+
+        session["data"]["appointment_id"] = int(appointment_id)
+
+        state_manager.update_state(
+            user_id,
+            BookingState.ASK_RESCHEDULE_DATE,
+        )
+
+        return (
+            "📅 Enter your new appointment date.\n\n"
+            "Format: YYYY-MM-DD"
+        )
+
+
+    def select_reschedule_slot(
+        self,
+        user_id: int,
+        slot: str,
+    ):
+
+        appointment_time = datetime.strptime(
+            slot,
+            "%H:%M",
+        ).time()
+
+        state_manager.save(
+            user_id,
+            "appointment_time",
+            appointment_time,
+        )
+
+        db = SessionLocal()
+
+        service = AppointmentService(db)
+
+        available = service.check_availability(
+            state_manager.get(user_id)["data"]["doctor"],
+            state_manager.get(user_id)["data"]["appointment_date"],
+            appointment_time,
+        )
+
+        if not available:
+
+            db.close()
+
+            return (
+                "❌ This slot has already been booked.\n"
+                "Please choose another slot."
+            )
+
+        appointment = service.reschedule(
+            appointment_id=state_manager.get(user_id)["data"]["appointment_id"],
+            appointment_date=state_manager.get(user_id)["data"]["appointment_date"],
+            appointment_time=appointment_time,
+        )
+
+        db.close()
+
+        state_manager.reset(user_id)
+
+        return (
+            "✅ Appointment Rescheduled Successfully.\n\n"
+            f"📅 Date: {appointment.appointment_date}\n"
+            f"🕒 Time: {appointment.appointment_time.strftime('%H:%M')}"
         )
