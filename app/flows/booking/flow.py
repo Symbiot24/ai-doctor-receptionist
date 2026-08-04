@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from app.services.slot_service import SlotService
 from app.database.db import SessionLocal
 from app.flows.booking.validator import BookingValidator
@@ -11,17 +11,443 @@ from app.telegram.keyboards import slot_keyboard
 
 
 class BookingFlow:
+    
+    def _auto_advance(self, user_id: int) -> str | tuple | None:
+        """Auto-advance through states where data is already present.
+        
+        Returns a response message if we reach a state that needs user input,
+        or None if we can continue auto-advancing.
+        """
+        session = state_manager.get(user_id)
+        state = session["state"]
+        data = session["data"]
+        
+        # Prevent infinite loops
+        for _ in range(20):
+            if state == BookingState.ASK_NAME:
+                if data.get("patient_name"):
+                    state_manager.update_state(user_id, BookingState.ASK_PHONE)
+                    state = BookingState.ASK_PHONE
+                    continue
+                break
+                
+            elif state == BookingState.ASK_PHONE:
+                if data.get("phone"):
+                    state_manager.update_state(user_id, BookingState.ASK_AGE)
+                    state = BookingState.ASK_AGE
+                    continue
+                break
+                
+            elif state == BookingState.ASK_AGE:
+                if data.get("age"):
+                    state_manager.update_state(user_id, BookingState.ASK_GENDER)
+                    state = BookingState.ASK_GENDER
+                    continue
+                break
+                
+            elif state == BookingState.ASK_GENDER:
+                if data.get("gender"):
+                    state_manager.update_state(user_id, BookingState.ASK_SYMPTOMS)
+                    state = BookingState.ASK_SYMPTOMS
+                    continue
+                break
+                
+            elif state == BookingState.ASK_SYMPTOMS:
+                if data.get("symptoms"):
+                    state_manager.update_state(user_id, BookingState.ASK_DOCTOR)
+                    state = BookingState.ASK_DOCTOR
+                    continue
+                break
+                
+            elif state == BookingState.ASK_DOCTOR:
+                if data.get("doctor"):
+                    state_manager.update_state(user_id, BookingState.ASK_DATE)
+                    state = BookingState.ASK_DATE
+                    continue
+                break
+                
+            elif state == BookingState.ASK_DATE:
+                if data.get("appointment_date"):
+                    # Check if we have doctor and slots
+                    if data.get("doctor"):
+                        db = SessionLocal()
+                        try:
+                            slot_service = SlotService(db)
+                            slots = slot_service.available_slots(
+                                data["doctor"],
+                                data["appointment_date"],
+                            )
+                        finally:
+                            db.close()
+                        
+                        if slots:
+                            state_manager.update_state(user_id, BookingState.ASK_TIME)
+                            state = BookingState.ASK_TIME
+                            continue
+                        else:
+                            # No slots available, stop at ASK_DATE to ask for new date
+                            break
+                    else:
+                        # No doctor yet, stop at ASK_DATE
+                        break
+                else:
+                    break
+                    
+            elif state == BookingState.ASK_TIME:
+                if data.get("appointment_time"):
+                    state_manager.update_state(user_id, BookingState.CONFIRM)
+                    state = BookingState.CONFIRM
+                    continue
+                break
+                
+            elif state == BookingState.CONFIRM:
+                # We've reached confirmation, show confirmation message
+                break
+                
+            else:
+                # Unknown state, break
+                break
+        
+        # If we ended up at CONFIRM state, return confirmation message
+        if state == BookingState.CONFIRM:
+            data = state_manager.get(user_id)["data"]
+            return (
+                f"Please confirm your appointment:\n\n"
+                f"Name: {data['patient_name']}\n"
+                f"Phone: {data['phone']}\n"
+                f"Age: {data['age']}\n"
+                f"Gender: {data['gender']}\n"
+                f"Symptoms: {data['symptoms']}\n"
+                f"Doctor: {data['doctor']}\n"
+                f"Date: {data['appointment_date']}\n"
+                f"Time: {data['appointment_time']}\n\n"
+                "Reply YES to confirm or NO to cancel."
+            )
+        
+        # If we ended up at ASK_TIME with slots available, show slot keyboard
+        if state == BookingState.ASK_TIME and data.get("appointment_date") and data.get("doctor"):
+            db = SessionLocal()
+            try:
+                slot_service = SlotService(db)
+                slots = slot_service.available_slots(
+                    data["doctor"],
+                    data["appointment_date"],
+                )
+            finally:
+                db.close()
+            
+            if slots:
+                return (
+                    "🕒 Please select an available slot:",
+                    slot_keyboard(slots),
+                )
+        
+        # If we ended up at ASK_DOCTOR, show doctor keyboard
+        if state == BookingState.ASK_DOCTOR:
+            db = SessionLocal()
+            try:
+                doctor_service = DoctorService(db)
+                doctors = doctor_service.get_all()
+            finally:
+                db.close()
+            
+            return (
+                "👨‍⚕️ Please select a doctor:",
+                doctor_keyboard(doctors),
+            )
+        
+        # Return None to indicate we should continue with normal flow
+        return None
+    
+    def _auto_advance(self, user_id: int) -> str | tuple | None:
+        """Auto-advance through states where data is already present.
+        
+        Returns a response message if we reach a state that needs user input,
+        or None if we can continue auto-advancing.
+        """
+        session = state_manager.get(user_id)
+        state = session["state"]
+        data = session["data"]
+        
+        # Prevent infinite loops
+        for _ in range(20):
+            if state == BookingState.ASK_NAME:
+                if data.get("patient_name"):
+                    state_manager.update_state(user_id, BookingState.ASK_PHONE)
+                    state = BookingState.ASK_PHONE
+                    continue
+                break
+                
+            elif state == BookingState.ASK_PHONE:
+                if data.get("phone"):
+                    state_manager.update_state(user_id, BookingState.ASK_AGE)
+                    state = BookingState.ASK_AGE
+                    continue
+                break
+                
+            elif state == BookingState.ASK_AGE:
+                if data.get("age"):
+                    state_manager.update_state(user_id, BookingState.ASK_GENDER)
+                    state = BookingState.ASK_GENDER
+                    continue
+                break
+                
+            elif state == BookingState.ASK_GENDER:
+                if data.get("gender"):
+                    state_manager.update_state(user_id, BookingState.ASK_SYMPTOMS)
+                    state = BookingState.ASK_SYMPTOMS
+                    continue
+                break
+                
+            elif state == BookingState.ASK_SYMPTOMS:
+                if data.get("symptoms"):
+                    state_manager.update_state(user_id, BookingState.ASK_DOCTOR)
+                    state = BookingState.ASK_DOCTOR
+                    continue
+                break
+                
+            elif state == BookingState.ASK_DOCTOR:
+                if data.get("doctor"):
+                    state_manager.update_state(user_id, BookingState.ASK_DATE)
+                    state = BookingState.ASK_DATE
+                    continue
+                break
+                
+            elif state == BookingState.ASK_DATE:
+                if data.get("appointment_date"):
+                    # Check if we have doctor and slots
+                    if data.get("doctor"):
+                        db = SessionLocal()
+                        try:
+                            slot_service = SlotService(db)
+                            slots = slot_service.available_slots(
+                                data["doctor"],
+                                data["appointment_date"],
+                            )
+                        finally:
+                            db.close()
+                        
+                        if slots:
+                            state_manager.update_state(user_id, BookingState.ASK_TIME)
+                            state = BookingState.ASK_TIME
+                            # Return slot keyboard for user to select
+                            return (
+                                "🕒 Please select an available slot:",
+                                slot_keyboard(slots),
+                            )
+                        else:
+                            # No slots available, ask for different date
+                            state_manager.update_state(user_id, BookingState.ASK_DATE)
+                            state = BookingState.ASK_DATE
+                            return (
+                                "❌ No slots available for this date.\n"
+                                "Please choose another date."
+                            )
+                    else:
+                        # No doctor yet, stay at ASK_DATE to ask for doctor first
+                        state_manager.update_state(user_id, BookingState.ASK_DOCTOR)
+                        state = BookingState.ASK_DOCTOR
+                        break
+                else:
+                    break
+                    
+            elif state == BookingState.ASK_TIME:
+                if data.get("appointment_time"):
+                    state_manager.update_state(user_id, BookingState.CONFIRM)
+                    state = BookingState.CONFIRM
+                    continue
+                break
+                
+            elif state == BookingState.CONFIRM:
+                # All data collected, show confirmation
+                return (
+                    f"Please confirm your appointment:\n\n"
+                    f"Name: {data['patient_name']}\n"
+                    f"Phone: {data['phone']}\n"
+                    f"Age: {data['age']}\n"
+                    f"Gender: {data['gender']}\n"
+                    f"Symptoms: {data['symptoms']}\n"
+                    f"Doctor: {data['doctor']}\n"
+                    f"Date: {data['appointment_date']}\n"
+                    f"Time: {data['appointment_time']}\n\n"
+                    "Reply YES to confirm or NO to cancel."
+                )
+                
+            else:
+                # Unknown state or RESCHEDULE states - don't auto-advance
+                break
+        
+        # If we've gone through the loop and haven't returned, 
+        # we're at a state that needs user input
+        return None
 
-    def start(self, user_id: int):
+    def start(
+        self,
+        user_id: int,
+        entities: dict | None = None,
+    ):
 
-        state_manager.update_state(
-            user_id,
-            BookingState.ASK_NAME,
-        )
+        entities = entities or {}
 
+        state_manager.reset(user_id)
+
+        # ---------------- Name ----------------
+        if entities.get("patient_name"):
+            state_manager.save(
+                user_id,
+                "patient_name",
+                entities["patient_name"],
+            )
+        else:
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_NAME,
+            )
+            return (
+                "🏥 Let's book your appointment.\n\n"
+                "What is your full name?"
+            )
+
+        # ---------------- Phone ----------------
+        if entities.get("phone"):
+            state_manager.save(
+                user_id,
+                "phone",
+                entities["phone"],
+            )
+        else:
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_PHONE,
+            )
+            return "📞 Please enter your phone number."
+
+        # ---------------- Age ----------------
+        if entities.get("age"):
+            state_manager.save(
+                user_id,
+                "age",
+                int(entities["age"]),
+            )
+        else:
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_AGE,
+            )
+            return "🎂 What is your age?"
+
+        # ---------------- Gender ----------------
+        if entities.get("gender"):
+            state_manager.save(
+                user_id,
+                "gender",
+                entities["gender"].title(),
+            )
+        else:
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_GENDER,
+            )
+            return "👤 What is your gender?"
+
+        # ---------------- Symptoms ----------------
+        if entities.get("symptoms"):
+            state_manager.save(
+                user_id,
+                "symptoms",
+                entities["symptoms"],
+            )
+        else:
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_SYMPTOMS,
+            )
+            return "🩺 Please describe your symptoms."
+
+        # ---------------- Doctor ----------------
+        if entities.get("doctor"):
+            # Verify doctor exists using fuzzy matching
+            db = SessionLocal()
+            try:
+                doctor_service = DoctorService(db)
+                doctor = doctor_service.find_by_name(entities["doctor"])
+                if doctor:
+                    state_manager.save(user_id, "doctor", doctor.name)
+                else:
+                    # If not found, still save the raw input for handle() to deal with
+                    state_manager.save(user_id, "doctor", entities["doctor"])
+            finally:
+                db.close()
+        else:
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_DOCTOR,
+            )
+            db = SessionLocal()
+            try:
+                doctor_service = DoctorService(db)
+                doctors = doctor_service.get_all()
+            finally:
+                db.close()
+            return (
+                "👨‍⚕️ Please select a doctor:",
+                doctor_keyboard(doctors),
+            )
+
+        # ---------------- Appointment Date ----------------
+        if entities.get("appointment_date"):
+            # Validate date format
+            date_str = entities["appointment_date"]
+            try:
+                appointment_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                state_manager.save(user_id, "appointment_date", appointment_date)
+            except ValueError:
+                state_manager.update_state(
+                    user_id,
+                    BookingState.ASK_DATE,
+                )
+                return "Please enter appointment date (YYYY-MM-DD)."
+        else:
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_DATE,
+            )
+            return "Preferred appointment date? (YYYY-MM-DD)"
+
+        # ---------------- Appointment Time ----------------
+        if entities.get("appointment_time"):
+            # Validate time format
+            time_str = entities["appointment_time"]
+            try:
+                appointment_time = datetime.strptime(time_str, "%H:%M").time()
+                state_manager.save(user_id, "appointment_time", appointment_time)
+            except ValueError:
+                state_manager.update_state(
+                    user_id,
+                    BookingState.ASK_TIME,
+                )
+                return "Please enter appointment time (HH:MM)."
+        else:
+            state_manager.update_state(
+                user_id,
+                BookingState.ASK_TIME,
+            )
+            return "Please select an available slot."
+
+        # All fields provided, go to confirmation
+        state_manager.update_state(user_id, BookingState.CONFIRM)
+        data = state_manager.get(user_id)["data"]
         return (
-            "🏥 Let's book your appointment.\n\n"
-            "What is your full name?"
+            f"Please confirm your appointment:\n\n"
+            f"Name: {data['patient_name']}\n"
+            f"Phone: {data['phone']}\n"
+            f"Age: {data['age']}\n"
+            f"Gender: {data['gender']}\n"
+            f"Symptoms: {data['symptoms']}\n"
+            f"Doctor: {data['doctor']}\n"
+            f"Date: {data['appointment_date']}\n"
+            f"Time: {data['appointment_time']}\n\n"
+            "Reply YES to confirm or NO to cancel."
         )
 
     def handle(self, user_id: int, message: str):

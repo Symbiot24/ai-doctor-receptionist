@@ -1,4 +1,4 @@
-from telegram import Update
+﻿from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -11,10 +11,8 @@ from telegram.ext import (
 from app.core.config import TELEGRAM_BOT_TOKEN
 from app.agent.ai_service import generate_reply
 
-from app.router.intent_router import (
-    IntentRouter,
-    Intent,
-)
+from app.router.intent_extractor import IntentExtractor
+
 from app.telegram.appointment_keyboard import appointment_actions
 from app.flows.booking.flow import BookingFlow
 
@@ -41,8 +39,12 @@ async def start(
         "• View My Appointments\n"
         "• Cancel Appointment\n"
         "• Reschedule Appointment\n\n"
-        "Just send a message like:\n"
-        "Book Appointment"
+        "Just tell me naturally what you need.\n\n"
+        "Examples:\n"
+        "• I want to book an appointment tomorrow.\n"
+        "• Show my appointments.\n"
+        "• Cancel my appointment.\n"
+        "• I need to reschedule."
     )
 
 
@@ -67,10 +69,7 @@ async def chat(
 
     try:
 
-        # -------------------------------
-        # Continue Existing Booking Flow
-        # -------------------------------
-
+        # Continue active booking/reschedule flow
         if session["state"] != BookingState.IDLE:
 
             reply = booking_flow.handle(
@@ -80,17 +79,28 @@ async def chat(
 
         else:
 
-            intent = IntentRouter.detect(message)
+            result = IntentExtractor.extract(message)
 
-            # ---------------- Book ---------------- #
+            intent = result.get("intent")
+            entities = result.get("entities", {})
 
-            if intent == Intent.BOOK:
+            print("=" * 60)
+            print("Intent :", intent)
+            print("Entities :", entities)
+            print("=" * 60)
 
-                reply = booking_flow.start(user_id)
+            # ---------------- BOOK ----------------
 
-            # ------------ My Appointments ---------- #
+            if intent == "BOOK_APPOINTMENT":
 
-            elif intent == Intent.MY_APPOINTMENTS:
+                reply = booking_flow.start(
+                    user_id,
+                    entities,
+                )
+
+            # ------------ VIEW APPOINTMENTS ------------
+
+            elif intent == "VIEW_APPOINTMENTS":
 
                 db = SessionLocal()
 
@@ -110,22 +120,20 @@ async def chat(
 
                 else:
 
-                    lines = []
-
                     for appointment in appointments:
 
                         await telegram_message.reply_text(
                             f"""
-                    🆔 Appointment #{appointment.id}
+🆔 Appointment #{appointment.id}
 
-                    👨‍⚕️ Doctor: {appointment.doctor}
+👨‍⚕️ Doctor: {appointment.doctor}
 
-                    📅 Date: {appointment.appointment_date}
+📅 Date: {appointment.appointment_date}
 
-                    🕒 Time: {appointment.appointment_time.strftime('%H:%M')}
+🕒 Time: {appointment.appointment_time.strftime('%H:%M')}
 
-                    📌 Status: {appointment.status}
-                    """,
+📌 Status: {appointment.status}
+""",
                             reply_markup=appointment_actions(
                                 appointment.id
                             ),
@@ -133,7 +141,85 @@ async def chat(
 
                     reply = None
 
-            # ------------- General Chat ------------ #
+            # ------------ CANCEL ------------
+
+            elif intent == "CANCEL_APPOINTMENT":
+
+                db = SessionLocal()
+
+                service = AppointmentService(db)
+
+                appointments = service.my_appointments(
+                    str(user_id)
+                )
+
+                db.close()
+
+                if not appointments:
+
+                    reply = "📭 You don't have any appointments."
+
+                else:
+
+                    for appointment in appointments:
+
+                        await telegram_message.reply_text(
+                            f"""
+🆔 Appointment #{appointment.id}
+
+👨‍⚕️ Doctor: {appointment.doctor}
+
+📅 Date: {appointment.appointment_date}
+
+🕒 Time: {appointment.appointment_time.strftime('%H:%M')}
+""",
+                            reply_markup=appointment_actions(
+                                appointment.id
+                            ),
+                        )
+
+                    reply = None
+
+            # ------------ RESCHEDULE ------------
+
+            elif intent == "RESCHEDULE_APPOINTMENT":
+
+                db = SessionLocal()
+
+                service = AppointmentService(db)
+
+                appointments = service.my_appointments(
+                    str(user_id)
+                )
+
+                db.close()
+
+                if not appointments:
+
+                    reply = "📭 You don't have any appointments."
+
+                else:
+
+                    for appointment in appointments:
+
+                        await telegram_message.reply_text(
+                            f"""
+🆔 Appointment #{appointment.id}
+
+👨‍⚕️ Doctor: {appointment.doctor}
+
+📅 Date: {appointment.appointment_date}
+
+🕒 Time: {appointment.appointment_time.strftime('%H:%M')}
+""",
+                            reply_markup=appointment_actions(
+                                appointment.id
+                            ),
+                        )
+
+                    reply = None
+
+            # ------------ GENERAL CHAT ------------
 
             else:
 
@@ -142,9 +228,7 @@ async def chat(
                     message,
                 )
 
-        # -------------------------------
-        # Reply with Keyboard if Returned
-        # -------------------------------
+        # ---------------- SEND RESPONSE ----------------
 
         if reply is None:
             return
@@ -192,7 +276,7 @@ def run_bot():
 
     app.add_handler(
         CallbackQueryHandler(
-            callback_handler
+            callback_handler,
         )
     )
 
