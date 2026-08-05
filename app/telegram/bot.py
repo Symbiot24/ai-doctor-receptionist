@@ -287,6 +287,6 @@ def run_bot():
         )
     )
 
-    print("🤖 Telegram Bot Running...")
+    print("Telegram Bot Running...")
 
     app.run_polling()
