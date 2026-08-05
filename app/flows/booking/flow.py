@@ -7,6 +7,7 @@ from app.services.doctor_service import DoctorService
 from app.state.booking_state import BookingState
 from app.telegram.keyboards import doctor_keyboard
 from app.state.state_manager import state_manager
+from app.memory.session_memory import session_memory
 from app.telegram.keyboards import slot_keyboard
 
 
@@ -20,7 +21,7 @@ class BookingFlow:
         """
         session = state_manager.get(user_id)
         state = session["state"]
-        data = session["data"]
+        data = session_memory.get(user_id)
         
         # Prevent infinite loops
         for _ in range(20):
@@ -110,7 +111,7 @@ class BookingFlow:
         
         # If we ended up at CONFIRM state, return confirmation message
         if state == BookingState.CONFIRM:
-            data = state_manager.get(user_id)["data"]
+            data = session_memory.get(user_id)
             return (
                 f"Please confirm your appointment:\n\n"
                 f"Name: {data['patient_name']}\n"
@@ -167,7 +168,7 @@ class BookingFlow:
         """
         session = state_manager.get(user_id)
         state = session["state"]
-        data = session["data"]
+        data = session_memory.get(user_id)
         
         # Prevent infinite loops
         for _ in range(20):
@@ -293,7 +294,7 @@ class BookingFlow:
 
         # ---------------- Name ----------------
         if entities.get("patient_name"):
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "patient_name",
                 entities["patient_name"],
@@ -310,7 +311,7 @@ class BookingFlow:
 
         # ---------------- Phone ----------------
         if entities.get("phone"):
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "phone",
                 entities["phone"],
@@ -324,7 +325,7 @@ class BookingFlow:
 
         # ---------------- Age ----------------
         if entities.get("age"):
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "age",
                 int(entities["age"]),
@@ -338,7 +339,7 @@ class BookingFlow:
 
         # ---------------- Gender ----------------
         if entities.get("gender"):
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "gender",
                 entities["gender"].title(),
@@ -352,7 +353,7 @@ class BookingFlow:
 
         # ---------------- Symptoms ----------------
         if entities.get("symptoms"):
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "symptoms",
                 entities["symptoms"],
@@ -372,10 +373,10 @@ class BookingFlow:
                 doctor_service = DoctorService(db)
                 doctor = doctor_service.find_by_name(entities["doctor"])
                 if doctor:
-                    state_manager.save(user_id, "doctor", doctor.name)
+                    session_memory.save(user_id, "doctor", doctor.name)
                 else:
                     # If not found, still save the raw input for handle() to deal with
-                    state_manager.save(user_id, "doctor", entities["doctor"])
+                    session_memory.save(user_id, "doctor", entities["doctor"])
             finally:
                 db.close()
         else:
@@ -400,7 +401,7 @@ class BookingFlow:
             date_str = entities["appointment_date"]
             try:
                 appointment_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                state_manager.save(user_id, "appointment_date", appointment_date)
+                session_memory.save(user_id, "appointment_date", appointment_date)
             except ValueError:
                 state_manager.update_state(
                     user_id,
@@ -420,7 +421,7 @@ class BookingFlow:
             time_str = entities["appointment_time"]
             try:
                 appointment_time = datetime.strptime(time_str, "%H:%M").time()
-                state_manager.save(user_id, "appointment_time", appointment_time)
+                session_memory.save(user_id, "appointment_time", appointment_time)
             except ValueError:
                 state_manager.update_state(
                     user_id,
@@ -436,7 +437,7 @@ class BookingFlow:
 
         # All fields provided, go to confirmation
         state_manager.update_state(user_id, BookingState.CONFIRM)
-        data = state_manager.get(user_id)["data"]
+        data = session_memory.get(user_id)
         return (
             f"Please confirm your appointment:\n\n"
             f"Name: {data['patient_name']}\n"
@@ -460,7 +461,7 @@ class BookingFlow:
 
         if state == BookingState.ASK_NAME:
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "patient_name",
                 message,
@@ -482,7 +483,7 @@ class BookingFlow:
             if not valid:
                 return error
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "phone",
                 message,
@@ -504,7 +505,7 @@ class BookingFlow:
             if not valid:
                 return error
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "age",
                 int(message),
@@ -526,7 +527,7 @@ class BookingFlow:
             if not valid:
                 return error
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "gender",
                 message.title(),
@@ -543,7 +544,7 @@ class BookingFlow:
 
         if state == BookingState.ASK_SYMPTOMS:
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "symptoms",
                 message,
@@ -588,7 +589,7 @@ class BookingFlow:
                     "Please enter one of the available doctors."
                 )
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "doctor",
                 doctor.name,
@@ -616,7 +617,7 @@ class BookingFlow:
                 "%Y-%m-%d",
             ).date()
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "appointment_date",
                 appointment_date,
@@ -627,7 +628,7 @@ class BookingFlow:
             appointment_service = AppointmentService(db)
 
             appointment = appointment_service.get_by_id(
-                session["data"]["appointment_id"]
+                session_memory.get(user_id)["appointment_id"]
             )
 
             if appointment is None or str(appointment.telegram_id) != str(user_id):
@@ -638,7 +639,7 @@ class BookingFlow:
 
                 return "❌ Appointment not found or access denied."
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "doctor",
                 appointment.doctor,
@@ -684,7 +685,7 @@ class BookingFlow:
                 "%Y-%m-%d",
             ).date()
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "appointment_date",
                 appointment_date,
@@ -695,7 +696,7 @@ class BookingFlow:
             slot_service = SlotService(db)
 
             slots = slot_service.available_slots(
-                session["data"]["doctor"],
+                session_memory.get(user_id)["doctor"],
                 appointment_date,
             )
 
@@ -732,7 +733,7 @@ class BookingFlow:
                 "%H:%M",
             ).time()
 
-            state_manager.save(
+            session_memory.save(
                 user_id,
                 "appointment_time",
                 appointment_time,
@@ -743,7 +744,7 @@ class BookingFlow:
                 BookingState.CONFIRM,
             )
 
-            data = session["data"]
+            data = session_memory.get(user_id)
 
             return (
                 f"Please confirm your appointment:\n\n"
@@ -773,9 +774,9 @@ class BookingFlow:
             service = AppointmentService(db)
 
             available = service.check_availability(
-                session["data"]["doctor"],
-                session["data"]["appointment_date"],
-                session["data"]["appointment_time"],
+                session_memory.get(user_id)["doctor"],
+                session_memory.get(user_id)["appointment_date"],
+                session_memory.get(user_id)["appointment_time"],
             )
 
             if not available:
@@ -792,10 +793,10 @@ class BookingFlow:
                     "Please enter another appointment time."
                 )
 
-            session["data"]["telegram_id"] = str(user_id)
+            session_memory.save(user_id, "telegram_id", str(user_id))
 
             appointment = service.book(
-                session["data"]
+                session_memory.get(user_id)
             )
 
             db.close()
@@ -811,7 +812,7 @@ class BookingFlow:
 
     def select_doctor(self, user_id: int, doctor_name: str):
 
-        state_manager.save(
+        session_memory.save(
             user_id,
             "doctor",
             doctor_name,
@@ -832,7 +833,7 @@ class BookingFlow:
             "%H:%M",
         ).time()
 
-        state_manager.save(
+        session_memory.save(
             user_id,
             "appointment_time",
             appointment_time,
@@ -843,7 +844,7 @@ class BookingFlow:
             BookingState.CONFIRM,
         )
 
-        data = state_manager.get(user_id)["data"]
+        data = session_memory.get(user_id)
 
         return (
             f"Please confirm your appointment:\n\n"
@@ -864,10 +865,8 @@ class BookingFlow:
         appointment_id: str,
     ):
 
-        session = state_manager.get(user_id)
-
-        session["data"]["appointment_id"] = int(appointment_id)
-
+        # Use memory for appointment_id
+        session_memory.save(user_id, "appointment_id", int(appointment_id))
         state_manager.update_state(
             user_id,
             BookingState.ASK_RESCHEDULE_DATE,
@@ -890,7 +889,7 @@ class BookingFlow:
             "%H:%M",
         ).time()
 
-        state_manager.save(
+        session_memory.save(
             user_id,
             "appointment_time",
             appointment_time,
@@ -901,8 +900,8 @@ class BookingFlow:
         service = AppointmentService(db)
 
         available = service.check_availability(
-            state_manager.get(user_id)["data"]["doctor"],
-            state_manager.get(user_id)["data"]["appointment_date"],
+            session_memory.get(user_id)["doctor"],
+            session_memory.get(user_id)["appointment_date"],
             appointment_time,
         )
 
@@ -916,8 +915,8 @@ class BookingFlow:
             )
 
         appointment = service.reschedule(
-            appointment_id=state_manager.get(user_id)["data"]["appointment_id"],
-            appointment_date=state_manager.get(user_id)["data"]["appointment_date"],
+            appointment_id=session_memory.get(user_id)["appointment_id"],
+            appointment_date=session_memory.get(user_id)["appointment_date"],
             appointment_time=appointment_time,
         )
 
