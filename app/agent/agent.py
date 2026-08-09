@@ -333,8 +333,8 @@ If you need to ask for clarification, you can include a "response" field in the 
                 response += f"🩺 Specialty: {doc['specialty']}\n"
                 if doc.get('consultation_fee'):
                     response += f"💰 Consultation Fee: ₹{doc['consultation_fee']}\n"
-                if doc.get('start_time') and doc.get('end_time'):
-                    response += f"🕐 Working Hours: {doc['start_time']} - {doc['end_time']}\n"
+                if doc.get('working_hours'):
+                    response += f"🕐 Working Hours: {doc['working_hours']}\n"
                 response += "\n"
             
             return response.strip()

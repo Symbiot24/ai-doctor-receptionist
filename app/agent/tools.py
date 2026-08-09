@@ -9,6 +9,7 @@ import logging
 
 from app.services.appointment_service import AppointmentService
 from app.services.doctor_service import DoctorService
+from app.services.slot_service import SlotService
 from app.flows.booking.flow import BookingFlow
 from app.database.db import SessionLocal
 
@@ -296,8 +297,7 @@ def doctor_search(arguments: Dict[str, Any]) -> Dict[str, Any]:
                 "name": doctor.name,
                 "specialty": doctor.specialization,
                 "consultation_fee": doctor.consultation_fee,
-                "start_time": doctor.start_time.strftime("%H:%M") if doctor.start_time else "",
-                "end_time": doctor.end_time.strftime("%H:%M") if doctor.end_time else ""
+                "working_hours": doctor.working_hours
             })
         
         # Create a user-friendly message
@@ -305,15 +305,17 @@ def doctor_search(arguments: Dict[str, Any]) -> Dict[str, Any]:
             message = "I couldn't find any doctors matching your criteria."
         elif len(formatted_doctors) == 1:
             doc = formatted_doctors[0]
+            hours = doc.get('working_hours') or 'N/A'
             message = f"I found one doctor matching your criteria:\n\n" \
                      f"👨‍⚕️ Name: {doc['name']}\n" \
                      f"🩺 Specialty: {doc['specialty']}\n" \
                      f"💰 Consultation Fee: ₹{doc.get('consultation_fee', 'N/A')}\n" \
-                     f"🕐 Working Hours: {doc.get('start_time', 'N/A')} - {doc.get('end_time', 'N/A')}"
+                     f"🕐 Working Hours: {hours}"
         else:
             message = f"I found {len(formatted_doctors)} doctors matching your criteria:\n\n"
             for i, doc in enumerate(formatted_doctors, 1):
-                message += f"{i}. 👨‍⚕️ {doc['name']} - {doc['specialty']} (₹{doc.get('consultation_fee', 'N/A')})\n"
+                hours = doc.get('working_hours') or 'N/A'
+                message += f"{i}. 👨‍⚕️ {doc['name']} - {doc['specialty']} (₹{doc.get('consultation_fee', 'N/A')}, {hours})\n"
             message += "\nWould you like more details about any of these doctors?"
         
         return {
@@ -358,14 +360,19 @@ def available_slots(arguments: Dict[str, Any]) -> Dict[str, Any]:
         # Parse date
         appointment_date = datetime.strptime(date_str, "%Y-%m-%d").date()
         
-        # Use booking flow to get available slots
-        slots = booking_flow.get_available_slots(
-            doctor_name=doctor_name,
-            appointment_date=appointment_date
-        )
+        # Use slot service to get available slots
+        db = SessionLocal()
+        try:
+            slot_service = SlotService(db)
+            slots = slot_service.available_slots(
+                doctor_name,
+                appointment_date
+            )
+        finally:
+            db.close()
         
         # Format slots for response
-        formatted_slots = [slot.strftime("%H:%M") for slot in slots]
+        formatted_slots = [str(slot) for slot in slots]
         
         # Create a user-friendly message
         if len(formatted_slots) == 0:

@@ -57,11 +57,45 @@ class Doctor(Base):
 
     consultation_fee = Column(Integer)
 
-    start_time = Column(Time)
+    morning_start = Column(Time)
 
-    end_time = Column(Time)
+    morning_end = Column(Time)
+
+    evening_start = Column(Time)
+
+    evening_end = Column(Time)
 
     active = Column(
         String,
         default="YES",
     )
+
+    # ---------------- Compatibility Alias ---------------- #
+
+    @property
+    def start_time(self):
+        return self.morning_start
+
+    @property
+    def end_time(self):
+        return self.evening_end
+
+    @property
+    def working_hours(self):
+        """Human-readable split shift timings.
+
+        Returns e.g. "10:00 - 14:00, 16:00 - 19:00"
+        or "" when no shifts are configured.
+        """
+        shifts = []
+        if self.morning_start and self.morning_end:
+            shifts.append(
+                f"{self.morning_start.strftime('%H:%M')} - "
+                f"{self.morning_end.strftime('%H:%M')}"
+            )
+        if self.evening_start and self.evening_end:
+            shifts.append(
+                f"{self.evening_start.strftime('%H:%M')} - "
+                f"{self.evening_end.strftime('%H:%M')}"
+            )
+        return ", ".join(shifts) if shifts else ""

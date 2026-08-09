@@ -27,12 +27,8 @@ def build_doctors_context() -> str:
         lines = []
 
         for doctor in doctors:
-            hours = ""
-            if doctor.start_time and doctor.end_time:
-                hours = (
-                    f"{doctor.start_time.strftime('%H:%M')} - "
-                    f"{doctor.end_time.strftime('%H:%M')}"
-                )
+
+            hours = doctor.working_hours or "N/A"
 
             slots = slot_service.available_slots(
                 doctor.name,
