@@ -1,3 +1,5 @@
+from sqlalchemy import or_
+
 from app.database.models import Doctor
 
 
@@ -26,4 +28,40 @@ class DoctorRepository:
                 Doctor.active == "YES",
             )
             .first()
+        )
+
+    def find_by_name(self, name):
+
+        return (
+            self.db.query(Doctor)
+            .filter(
+                Doctor.active == "YES",
+                or_(
+                    Doctor.name.ilike(f"%{name}%"),
+                    Doctor.name.ilike(f"%{name.strip().title()}%"),
+                ),
+            )
+            .first()
+        )
+
+    def search_by_name(self, name):
+
+        return (
+            self.db.query(Doctor)
+            .filter(
+                Doctor.active == "YES",
+                Doctor.name.ilike(f"%{name}%"),
+            )
+            .all()
+        )
+
+    def get_by_specialty(self, specialty):
+
+        return (
+            self.db.query(Doctor)
+            .filter(
+                Doctor.active == "YES",
+                Doctor.specialization.ilike(f"%{specialty}%"),
+            )
+            .all()
         )

@@ -218,7 +218,7 @@ def view_appointments(arguments: Dict[str, Any]) -> Dict[str, Any]:
         for appt in appointments:
             formatted_appointments.append({
                 "id": appt.id,
-                "doctor_name": appt.doctor.name if appt.doctor else "Unknown",
+                "doctor_name": appt.doctor if appt.doctor else "Unknown",
                 "date": appt.appointment_date.strftime("%Y-%m-%d") if appt.appointment_date else "",
                 "time": appt.appointment_time.strftime("%H:%M") if appt.appointment_time else "",
                 "status": appt.status
@@ -282,12 +282,11 @@ def doctor_search(arguments: Dict[str, Any]) -> Dict[str, Any]:
         # Use doctor service to search doctors
         doctor_service = DoctorService(db)
         if specialty:
-            doctors = doctor_service.get_doctors_by_specialty(specialty)
+            doctors = doctor_service.get_by_specialty(specialty)
         elif name:
-            doctors = doctor_service.search_doctors_by_name(name)
+            doctors = doctor_service.search_by_name(name)
         else:
-            # This shouldn't happen due to above check, but just in case
-            doctors = doctor_service.get_all_doctors()
+            doctors = doctor_service.get_all()
         
         # Format doctors for response
         formatted_doctors = []
@@ -295,9 +294,10 @@ def doctor_search(arguments: Dict[str, Any]) -> Dict[str, Any]:
             formatted_doctors.append({
                 "id": doctor.id,
                 "name": doctor.name,
-                "specialty": doctor.specialty,
-                "phone": doctor.phone,
-                "email": doctor.email
+                "specialty": doctor.specialization,
+                "consultation_fee": doctor.consultation_fee,
+                "start_time": doctor.start_time.strftime("%H:%M") if doctor.start_time else "",
+                "end_time": doctor.end_time.strftime("%H:%M") if doctor.end_time else ""
             })
         
         # Create a user-friendly message
@@ -306,14 +306,14 @@ def doctor_search(arguments: Dict[str, Any]) -> Dict[str, Any]:
         elif len(formatted_doctors) == 1:
             doc = formatted_doctors[0]
             message = f"I found one doctor matching your criteria:\n\n" \
-                     f"ðŸ‘¨â€âš•ï¸ Name: {doc['name']}\n" \
-                     f"ðŸ©º Specialty: {doc['specialty']}\n" \
-                     f"ðŸ“ž Phone: {doc.get('phone', 'N/A')}\n" \
-                     f"ðŸ“§ Email: {doc.get('email', 'N/A')}"
+                     f"👨‍⚕️ Name: {doc['name']}\n" \
+                     f"🩺 Specialty: {doc['specialty']}\n" \
+                     f"💰 Consultation Fee: ₹{doc.get('consultation_fee', 'N/A')}\n" \
+                     f"🕐 Working Hours: {doc.get('start_time', 'N/A')} - {doc.get('end_time', 'N/A')}"
         else:
             message = f"I found {len(formatted_doctors)} doctors matching your criteria:\n\n"
             for i, doc in enumerate(formatted_doctors, 1):
-                message += f"{i}. ðŸ‘¨â€âš•ï¸ {doc['name']} - {doc['specialty']}\n"
+                message += f"{i}. 👨‍⚕️ {doc['name']} - {doc['specialty']} (₹{doc.get('consultation_fee', 'N/A')})\n"
             message += "\nWould you like more details about any of these doctors?"
         
         return {

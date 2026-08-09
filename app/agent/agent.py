@@ -331,10 +331,10 @@ If you need to ask for clarification, you can include a "response" field in the 
             for doc in doctors:
                 response += f"👨‍⚕️ Dr. {doc['name']}\n"
                 response += f"🩺 Specialty: {doc['specialty']}\n"
-                if doc.get('phone'):
-                    response += f"📞 Phone: {doc['phone']}\n"
-                if doc.get('email'):
-                    response += f"📧 Email: {doc['email']}\n"
+                if doc.get('consultation_fee'):
+                    response += f"💰 Consultation Fee: ₹{doc['consultation_fee']}\n"
+                if doc.get('start_time') and doc.get('end_time'):
+                    response += f"🕐 Working Hours: {doc['start_time']} - {doc['end_time']}\n"
                 response += "\n"
             
             return response.strip()
