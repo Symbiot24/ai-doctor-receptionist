@@ -41,6 +41,11 @@ class Appointment(Base):
         nullable=False,
     )
 
+    clinic_id = Column(
+        Integer,
+        nullable=False,
+    )
+
     reminder_24h_sent = Column(
         Boolean,
         default=False,
@@ -54,6 +59,36 @@ class Appointment(Base):
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
+    )
+
+class Clinic(Base):
+
+    __tablename__ = "clinics"
+
+    id = Column(Integer, primary_key=True)
+
+    name = Column(String(100), nullable=False)
+
+    description = Column(Text)
+
+    phone = Column(String(20))
+
+    address = Column(String(255))
+
+    active = Column(
+        String,
+        default="YES",
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 class Doctor(Base):
@@ -79,6 +114,11 @@ class Doctor(Base):
     active = Column(
         String,
         default="YES",
+    )
+
+    clinic_id = Column(
+        Integer,
+        nullable=False,
     )
 
     # ---------------- Compatibility Alias ---------------- #

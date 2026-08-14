@@ -3,6 +3,8 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.database.models import Appointment
+from app.database.models import Clinic
+from app.database.models import Doctor
 
 
 class AppointmentRepository:
@@ -13,10 +15,56 @@ class AppointmentRepository:
 
     # ---------------- Create ---------------- #
 
+    def _resolve_clinic_id(
+        self,
+        doctor_name,
+    ):
+
+        doctor = (
+            self.db.query(Doctor)
+            .filter(
+                Doctor.active == "YES",
+                Doctor.name == doctor_name,
+            )
+            .first()
+        )
+
+        if doctor is not None and doctor.clinic_id is not None:
+
+            return doctor.clinic_id
+
+        clinic = (
+            self.db.query(Clinic)
+            .filter(
+                Clinic.active == "YES"
+            )
+            .first()
+        )
+
+        if clinic is None:
+
+            clinic = self.db.query(Clinic).first()
+
+        if clinic is None:
+
+            raise ValueError(
+                "No clinic record found. Run the clinic migration/seed first."
+            )
+
+        return clinic.id
+
     def create(
         self,
         appointment_data: dict,
     ):
+
+        appointment_data = dict(appointment_data)
+
+        appointment_data.pop("clinic_id", None)
+
+        appointment_data["clinic_id"] = self._resolve_clinic_id(
+            appointment_data.get("doctor")
+        )
 
         appointment = Appointment(**appointment_data)
 
