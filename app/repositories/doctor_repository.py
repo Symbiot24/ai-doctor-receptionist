@@ -9,7 +9,84 @@ class DoctorRepository:
 
         self.db = db
 
+    # ---------------- Create ---------------- #
+
+    def create(
+        self,
+        doctor_data: dict,
+    ):
+
+        doctor = Doctor(**doctor_data)
+
+        self.db.add(doctor)
+
+        self.db.commit()
+
+        self.db.refresh(doctor)
+
+        return doctor
+
+    # ---------------- Update ---------------- #
+
+    def update(
+        self,
+        doctor,
+        updates: dict,
+    ):
+
+        for key, value in updates.items():
+
+            setattr(doctor, key, value)
+
+        self.db.commit()
+
+        self.db.refresh(doctor)
+
+        return doctor
+
+    # ---------------- Active Status ---------------- #
+
+    def activate(
+        self,
+        doctor,
+    ):
+
+        doctor.active = "YES"
+
+        self.db.commit()
+
+        self.db.refresh(doctor)
+
+        return doctor
+
+    def deactivate(
+        self,
+        doctor,
+    ):
+
+        doctor.active = "NO"
+
+        self.db.commit()
+
+        self.db.refresh(doctor)
+
+        return doctor
+
+    # ---------------- Queries ---------------- #
+
     def get_all(self):
+
+        # Backward-compatible: Telegram booking and AI context
+        # rely on this returning ONLY active doctors.
+        return (
+            self.db.query(Doctor)
+            .filter(
+                Doctor.active == "YES"
+            )
+            .all()
+        )
+
+    def get_active(self):
 
         return (
             self.db.query(Doctor)
@@ -17,6 +94,19 @@ class DoctorRepository:
                 Doctor.active == "YES"
             )
             .all()
+        )
+
+    def get_by_id(
+        self,
+        doctor_id,
+    ):
+
+        return (
+            self.db.query(Doctor)
+            .filter(
+                Doctor.id == doctor_id,
+            )
+            .first()
         )
 
     def exists(self, name):

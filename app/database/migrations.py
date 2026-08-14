@@ -99,6 +99,45 @@ def ensure_single_clinic():
             )
 
 
+def ensure_doctor_clinic_assignment():
+    """Backfill clinic_id on doctors from the single clinic.
+
+    Safety net: existing doctors created before clinic association are
+    linked to the single clinic. No-op when every doctor already has a
+    clinic_id. Does not touch appointments.
+    """
+    with engine.begin() as conn:
+
+        unassigned = conn.execute(
+            text("SELECT COUNT(*) FROM doctors WHERE clinic_id IS NULL")
+        ).scalar()
+
+        if unassigned > 0:
+
+            clinic_id = conn.execute(
+                text(
+                    "SELECT id FROM clinics WHERE active = 'YES' "
+                    "ORDER BY id LIMIT 1"
+                )
+            ).scalar()
+
+            if clinic_id is None:
+
+                clinic_id = conn.execute(
+                    text("SELECT id FROM clinics ORDER BY id LIMIT 1")
+                ).scalar()
+
+            if clinic_id is not None:
+
+                conn.execute(
+                    text(
+                        "UPDATE doctors SET clinic_id = :clinic_id "
+                        "WHERE clinic_id IS NULL"
+                    ),
+                    {"clinic_id": clinic_id},
+                )
+
+
 if __name__ == "__main__":
 
     ensure_reminder_columns()
@@ -107,6 +146,9 @@ if __name__ == "__main__":
 
     ensure_single_clinic()
 
+    ensure_doctor_clinic_assignment()
+
     print("✔ Reminder columns ensured.")
     print("✔ Clinic table ensured.")
     print("✔ Clinic seed ensured.")
+    print("✔ Doctor clinic assignment ensured.")
