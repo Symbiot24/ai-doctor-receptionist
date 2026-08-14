@@ -22,7 +22,9 @@ from app.state.booking_state import BookingState
 from app.telegram.callbacks import callback_handler
 
 from app.database.db import SessionLocal
+from app.database.migrations import ensure_reminder_columns
 from app.services.appointment_service import AppointmentService
+from app.services.reminder_service import start_reminder_loop
 
 booking_flow = BookingFlow()
 
@@ -261,6 +263,9 @@ async def chat(
 
 def run_bot():
 
+    # Ensure reminder tracking columns exist in the database.
+    ensure_reminder_columns()
+
     app = (
         ApplicationBuilder()
         .token(TELEGRAM_BOT_TOKEN)
@@ -286,6 +291,9 @@ def run_bot():
             chat,
         )
     )
+
+    # Start the reminder background worker.
+    start_reminder_loop()
 
     print("Telegram Bot Running...")
 

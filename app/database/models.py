@@ -5,6 +5,7 @@ from sqlalchemy import Date
 from sqlalchemy import Time
 from sqlalchemy import Text
 from sqlalchemy import DateTime
+from sqlalchemy import Boolean
 from sqlalchemy.sql import func
 
 from app.database.db import Base
@@ -38,6 +39,16 @@ class Appointment(Base):
         String,
         default="BOOKED",
         nullable=False,
+    )
+
+    reminder_24h_sent = Column(
+        Boolean,
+        default=False,
+    )
+
+    reminder_1h_sent = Column(
+        Boolean,
+        default=False,
     )
 
     created_at = Column(
