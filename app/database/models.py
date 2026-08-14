@@ -6,6 +6,7 @@ from sqlalchemy import Time
 from sqlalchemy import Text
 from sqlalchemy import DateTime
 from sqlalchemy import Boolean
+from sqlalchemy import UniqueConstraint
 from sqlalchemy.sql import func
 
 from app.database.db import Base
@@ -150,3 +151,35 @@ class Doctor(Base):
                 f"{self.evening_end.strftime('%H:%M')}"
             )
         return ", ".join(shifts) if shifts else ""
+
+
+class DoctorSchedule(Base):
+
+    __tablename__ = "doctor_schedules"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "doctor_id",
+            "day_of_week",
+            name="uq_doctor_schedule_day",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    doctor_id = Column(Integer, nullable=False)
+
+    day_of_week = Column(Integer, nullable=False)
+
+    enabled = Column(
+        Boolean,
+        default=True,
+    )
+
+    morning_start = Column(Time)
+
+    morning_end = Column(Time)
+
+    evening_start = Column(Time)
+
+    evening_end = Column(Time)
