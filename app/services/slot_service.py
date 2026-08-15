@@ -8,6 +8,20 @@ from app.services.doctor_schedule_service import DoctorScheduleService
 
 
 class SlotService:
+    """Single source of truth for doctor slot availability.
+
+    Availability rules (identical for new booking, slot display and
+    rescheduling):
+
+    1. Doctor exists
+    2. Doctor is active
+    3. Weekly schedule exists for the weekday (or legacy shifts)
+    4. That weekday is enabled
+    5. The requested date is not a doctor day-off
+    6. Time falls inside a morning/evening shift boundary
+    7. Existing BOOKED appointments are excluded (CANCELLED never blocks)
+    8. Slot duration is respected (no slot that overruns a shift)
+    """
 
     SLOT_DURATION = 30
 
@@ -24,6 +38,26 @@ class SlotService:
         self.schedule_service = DoctorScheduleService(db)
 
         self.day_off_service = DoctorDayOffService(db)
+
+    # ---------------- Helpers ---------------- #
+
+    @staticmethod
+    def _to_date(value):
+
+        if isinstance(value, str):
+
+            return datetime.strptime(value, "%Y-%m-%d").date()
+
+        return value
+
+    @staticmethod
+    def _to_time(value):
+
+        if isinstance(value, str):
+
+            return datetime.strptime(value, "%H:%M").time()
+
+        return value
 
     def _window_slots(
         self,
@@ -47,6 +81,8 @@ class SlotService:
             end_time,
         )
 
+        # Generate only slots that fit fully inside the shift window:
+        # current < end guarantees a full SLOT_DURATION fits before end.
         while current < end:
 
             slot = current.time()
@@ -70,6 +106,64 @@ class SlotService:
             (doctor.evening_start, doctor.evening_end),
         ]
 
+    def _filter_shifts(self, shifts):
+
+        return [
+            (start, end)
+            for start, end in shifts
+            if start and end
+        ]
+
+    def _resolve_shifts(
+        self,
+        doctor,
+        appointment_date,
+    ):
+        """Return the active (start, end) shift windows for the date.
+
+        Returns an empty list when the doctor has no availability that day
+        (day-off, disabled weekday, or no schedule/shifts configured).
+        """
+        if self.day_off_service.is_day_off(
+            doctor.id,
+            appointment_date,
+        ):
+            return []
+
+        day_of_week = appointment_date.weekday()
+
+        schedule = self.schedule_service.get_day_schedule(
+            doctor.id,
+            day_of_week,
+        )
+
+        if schedule is not None:
+
+            if not schedule.enabled:
+                return []
+
+            return self._filter_shifts(
+                [
+                    (schedule.morning_start, schedule.morning_end),
+                    (schedule.evening_start, schedule.evening_end),
+                ]
+            )
+
+        shifts = self._filter_shifts(
+            self._shifts_from_doctor(doctor)
+        )
+
+        if not shifts:
+
+            shifts = [
+                (
+                    datetime.strptime(self.DEFAULT_START, "%H:%M").time(),
+                    datetime.strptime(self.DEFAULT_END, "%H:%M").time(),
+                )
+            ]
+
+        return shifts
+
     def _generate(
         self,
         shifts,
@@ -90,73 +184,67 @@ class SlotService:
 
         return slots
 
+    # ---------------- Public API ---------------- #
+
     def available_slots(
         self,
         doctor_name,
         appointment_date,
+        exclude_appointment_id=None,
     ):
 
-        if isinstance(appointment_date, str):
-
-            appointment_date = datetime.strptime(
-                appointment_date,
-                "%Y-%m-%d",
-            ).date()
-
-        booked = self.repository.get_booked_slots(
-            doctor_name,
-            appointment_date,
-        )
+        appointment_date = self._to_date(appointment_date)
 
         doctor = self.doctor_service.find_by_name(doctor_name)
 
         if doctor is None:
             return []
 
-        # A date-specific day-off overrides the weekly schedule entirely.
-        if self.day_off_service.is_day_off(
-            doctor.id,
-            appointment_date,
-        ):
+        shifts = self._resolve_shifts(doctor, appointment_date)
+
+        if not shifts:
             return []
 
-        day_of_week = appointment_date.weekday()
-
-        schedule = self.schedule_service.get_day_schedule(
-            doctor.id,
-            day_of_week,
+        booked = self.repository.get_booked_slots(
+            doctor_name,
+            appointment_date,
+            exclude_appointment_id=exclude_appointment_id,
         )
 
-        # Weekly schedule takes priority when it exists.
-        if schedule is not None:
+        return self._generate(shifts, booked)
 
-            if not schedule.enabled:
-                return []
+    def is_slot_available(
+        self,
+        doctor_name,
+        appointment_date,
+        appointment_time,
+        exclude_appointment_id=None,
+    ):
 
-            shifts = [
-                (schedule.morning_start, schedule.morning_end),
-                (schedule.evening_start, schedule.evening_end),
-            ]
+        appointment_date = self._to_date(appointment_date)
 
-            return self._generate(shifts, booked)
+        appointment_time = self._to_time(appointment_time)
 
-        # No schedule record yet: fall back to the doctor's legacy
-        # morning/evening shift fields so existing booking keeps working.
-        slots = self._generate(
-            self._shifts_from_doctor(doctor),
-            booked,
+        doctor = self.doctor_service.find_by_name(doctor_name)
+
+        if doctor is None:
+            return False
+
+        shifts = self._resolve_shifts(doctor, appointment_date)
+
+        if not shifts:
+            return False
+
+        # The requested time must be a slot start that fits inside a shift.
+        candidates = self._generate(shifts, booked=set())
+
+        if appointment_time.strftime("%H:%M") not in candidates:
+            return False
+
+        booked = self.repository.get_booked_slots(
+            doctor_name,
+            appointment_date,
+            exclude_appointment_id=exclude_appointment_id,
         )
 
-        # Fall back to a default window if the doctor has no
-        # shift timings configured yet (e.g. pre-migration).
-        if not slots and not (
-            doctor.morning_start or doctor.evening_start
-        ):
-
-            slots = self._window_slots(
-                datetime.strptime(self.DEFAULT_START, "%H:%M").time(),
-                datetime.strptime(self.DEFAULT_END, "%H:%M").time(),
-                booked,
-            )
-
-        return slots
+        return appointment_time not in booked

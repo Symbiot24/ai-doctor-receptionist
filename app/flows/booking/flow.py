@@ -650,6 +650,7 @@ class BookingFlow:
             slots = slot_service.available_slots(
                 appointment.doctor,
                 appointment_date,
+                exclude_appointment_id=appointment.id,
             )
 
             db.close()
@@ -769,14 +770,18 @@ class BookingFlow:
 
                 return "❌ Appointment cancelled."
 
+            data = session_memory.get(user_id)
+
             db = SessionLocal()
+
+            slot_service = SlotService(db)
 
             service = AppointmentService(db)
 
-            available = service.check_availability(
-                session_memory.get(user_id)["doctor"],
-                session_memory.get(user_id)["appointment_date"],
-                session_memory.get(user_id)["appointment_time"],
+            available = slot_service.is_slot_available(
+                data["doctor"],
+                data["appointment_date"],
+                data["appointment_time"],
             )
 
             if not available:
@@ -789,15 +794,31 @@ class BookingFlow:
                 )
 
                 return (
-                    "❌ This slot is already booked.\n\n"
+                    "❌ This slot is not available.\n\n"
                     "Please enter another appointment time."
                 )
 
             session_memory.save(user_id, "telegram_id", str(user_id))
 
-            appointment = service.book(
-                session_memory.get(user_id)
-            )
+            try:
+
+                appointment = service.book(
+                    session_memory.get(user_id)
+                )
+
+            except ValueError as error:
+
+                db.close()
+
+                state_manager.update_state(
+                    user_id,
+                    BookingState.ASK_TIME,
+                )
+
+                return (
+                    f"❌ {error}\n\n"
+                    "Please enter another appointment time."
+                )
 
             db.close()
 
@@ -895,14 +916,19 @@ class BookingFlow:
             appointment_time,
         )
 
+        appointment_id = session_memory.get(user_id)["appointment_id"]
+
         db = SessionLocal()
+
+        slot_service = SlotService(db)
 
         service = AppointmentService(db)
 
-        available = service.check_availability(
+        available = slot_service.is_slot_available(
             session_memory.get(user_id)["doctor"],
             session_memory.get(user_id)["appointment_date"],
             appointment_time,
+            exclude_appointment_id=appointment_id,
         )
 
         if not available:
@@ -910,15 +936,26 @@ class BookingFlow:
             db.close()
 
             return (
-                "❌ This slot has already been booked.\n"
+                "❌ This slot is not available.\n"
                 "Please choose another slot."
             )
 
-        appointment = service.reschedule(
-            appointment_id=session_memory.get(user_id)["appointment_id"],
-            appointment_date=session_memory.get(user_id)["appointment_date"],
-            appointment_time=appointment_time,
-        )
+        try:
+
+            appointment = service.reschedule(
+                appointment_id=appointment_id,
+                appointment_date=session_memory.get(user_id)["appointment_date"],
+                appointment_time=appointment_time,
+            )
+
+        except ValueError as error:
+
+            db.close()
+
+            return (
+                f"❌ {error}\n"
+                "Please choose another slot."
+            )
 
         db.close()
 

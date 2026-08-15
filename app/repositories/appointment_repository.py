@@ -102,17 +102,25 @@ class AppointmentRepository:
         self,
         doctor: str,
         appointment_date: date,
+        exclude_appointment_id=None,
     ):
 
-        appointments = (
+        query = (
             self.db.query(Appointment)
             .filter(
                 Appointment.doctor == doctor,
                 Appointment.appointment_date == appointment_date,
                 Appointment.status == "BOOKED",
             )
-            .all()
         )
+
+        if exclude_appointment_id is not None:
+
+            query = query.filter(
+                Appointment.id != exclude_appointment_id,
+            )
+
+        appointments = query.all()
 
         return [
             appointment.appointment_time

@@ -1,11 +1,16 @@
 from app.repositories.appointment_repository import AppointmentRepository
+from app.services.slot_service import SlotService
 
 
 class AppointmentService:
 
     def __init__(self, db):
 
+        self.db = db
+
         self.repository = AppointmentRepository(db)
+
+        self.slot_service = SlotService(db)
 
     # ---------------- Booking ---------------- #
 
@@ -13,6 +18,16 @@ class AppointmentService:
         self,
         appointment_data,
     ):
+
+        appointment_data = dict(appointment_data)
+
+        if not self.slot_service.is_slot_available(
+            appointment_data.get("doctor"),
+            appointment_data.get("appointment_date"),
+            appointment_data.get("appointment_time"),
+        ):
+
+            raise ValueError("Slot is not available for booking.")
 
         return self.repository.create(
             appointment_data
@@ -27,7 +42,7 @@ class AppointmentService:
         appointment_time,
     ):
 
-        return self.repository.is_slot_available(
+        return self.slot_service.is_slot_available(
             doctor,
             appointment_date,
             appointment_time,
@@ -110,6 +125,15 @@ class AppointmentService:
 
         if appointment is None:
             return None
+
+        if not self.slot_service.is_slot_available(
+            appointment.doctor,
+            appointment_date,
+            appointment_time,
+            exclude_appointment_id=appointment.id,
+        ):
+
+            raise ValueError("New slot is not available.")
 
         return self.repository.reschedule(
             appointment,
