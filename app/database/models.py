@@ -153,6 +153,27 @@ class Doctor(Base):
         return ", ".join(shifts) if shifts else ""
 
 
+class DoctorDayOff(Base):
+
+    __tablename__ = "doctor_day_offs"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "doctor_id",
+            "date",
+            name="uq_doctor_day_off",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    doctor_id = Column(Integer, nullable=False)
+
+    date = Column(Date, nullable=False)
+
+    reason = Column(String(255))
+
+
 class DoctorSchedule(Base):
 
     __tablename__ = "doctor_schedules"

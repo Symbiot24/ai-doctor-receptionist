@@ -229,6 +229,53 @@ def ensure_doctor_schedule_table():
                 )
 
 
+_DOCTOR_DAY_OFF_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS doctor_day_offs (
+    id SERIAL PRIMARY KEY,
+    doctor_id INTEGER NOT NULL REFERENCES doctors(id),
+    date DATE NOT NULL,
+    reason VARCHAR(255),
+    CONSTRAINT uq_doctor_day_off UNIQUE (doctor_id, date)
+)
+"""
+
+
+def ensure_doctor_day_off_table():
+    """Create the doctor_day_offs table and ensure the unique constraint.
+
+    Safe to call on every startup:
+    - CREATE TABLE IF NOT EXISTS is a no-op when the table already exists.
+    - Adds the (doctor_id, date) unique constraint if missing so a doctor
+      cannot have the same day off twice.
+    """
+    with engine.begin() as conn:
+
+        if "doctor_day_offs" not in inspect(conn).get_table_names():
+
+            conn.execute(text(_DOCTOR_DAY_OFF_TABLE_SQL))
+
+        else:
+
+            constraints = {
+                row[0]
+                for row in conn.execute(
+                    text(
+                        "SELECT conname FROM pg_constraint "
+                        "WHERE conrelid = 'doctor_day_offs'::regclass"
+                    )
+                )
+            }
+
+            if "uq_doctor_day_off" not in constraints:
+
+                conn.execute(
+                    text(
+                        "ALTER TABLE doctor_day_offs ADD CONSTRAINT "
+                        "uq_doctor_day_off UNIQUE (doctor_id, date)"
+                    )
+                )
+
+
 if __name__ == "__main__":
 
     ensure_reminder_columns()
@@ -241,8 +288,11 @@ if __name__ == "__main__":
 
     ensure_doctor_schedule_table()
 
-    print("✔ Reminder columns ensured.")
-    print("✔ Clinic table ensured.")
-    print("✔ Clinic seed ensured.")
-    print("✔ Doctor clinic assignment ensured.")
-    print("✔ Doctor schedule table ensured.")
+    ensure_doctor_day_off_table()
+
+    print("Reminder columns ensured.")
+    print("Clinic table ensured.")
+    print("Clinic seed ensured.")
+    print("Doctor clinic assignment ensured.")
+    print("Doctor schedule table ensured.")
+    print("Doctor day-off table ensured.")

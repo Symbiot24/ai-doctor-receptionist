@@ -2,6 +2,7 @@ from datetime import datetime
 from datetime import timedelta
 
 from app.repositories.appointment_repository import AppointmentRepository
+from app.services.doctor_day_off_service import DoctorDayOffService
 from app.services.doctor_service import DoctorService
 from app.services.doctor_schedule_service import DoctorScheduleService
 
@@ -21,6 +22,8 @@ class SlotService:
         self.doctor_service = DoctorService(db)
 
         self.schedule_service = DoctorScheduleService(db)
+
+        self.day_off_service = DoctorDayOffService(db)
 
     def _window_slots(
         self,
@@ -108,6 +111,13 @@ class SlotService:
         doctor = self.doctor_service.find_by_name(doctor_name)
 
         if doctor is None:
+            return []
+
+        # A date-specific day-off overrides the weekly schedule entirely.
+        if self.day_off_service.is_day_off(
+            doctor.id,
+            appointment_date,
+        ):
             return []
 
         day_of_week = appointment_date.weekday()
