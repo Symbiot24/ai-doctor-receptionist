@@ -96,6 +96,19 @@ class DoctorRepository:
             .all()
         )
 
+    def get_all_including_inactive(self):
+
+        # Admin-facing: the API needs the full roster so deactivated
+        # doctors can be reactivated. Telegram/AI paths keep using
+        # get_all() (active-only) for backward compatibility.
+        return (
+            self.db.query(Doctor)
+            .order_by(
+                Doctor.id,
+            )
+            .all()
+        )
+
     def get_by_id(
         self,
         doctor_id,

@@ -46,25 +46,33 @@ class DoctorScheduleService:
 
             key = day_of_week.strip().lower()
 
-            if key not in cls.DAY_NAMES:
+            if key in cls.DAY_NAMES:
+
+                return cls.DAY_NAMES[key]
+
+            try:
+
+                value = int(key)
+
+            except ValueError:
 
                 raise ValueError(
                     f"Invalid weekday {day_of_week!r}. "
                     f"Use 0-6 or one of {cls.WEEKDAYS}."
                 )
 
-            return cls.DAY_NAMES[key]
+        else:
 
-        try:
+            try:
 
-            value = int(day_of_week)
+                value = int(day_of_week)
 
-        except (TypeError, ValueError):
+            except (TypeError, ValueError):
 
-            raise ValueError(
-                f"Invalid weekday {day_of_week!r}. "
-                f"Use 0-6 or one of {cls.WEEKDAYS}."
-            )
+                raise ValueError(
+                    f"Invalid weekday {day_of_week!r}. "
+                    f"Use 0-6 or one of {cls.WEEKDAYS}."
+                )
 
         if value < 0 or value > 6:
 

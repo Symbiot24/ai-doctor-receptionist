@@ -47,6 +47,36 @@ CREATE TABLE IF NOT EXISTS clinics (
 )
 """
 
+_CLINIC_SINGLETON_FUNCTION_SQL = """
+CREATE OR REPLACE FUNCTION enforce_single_clinic() RETURNS trigger AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF EXISTS (SELECT 1 FROM clinics) THEN
+            RAISE EXCEPTION 'Only one clinic record is allowed.';
+        END IF;
+        RETURN NEW;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF NEW.id <> OLD.id THEN
+            RAISE EXCEPTION 'Clinic id cannot be changed.';
+        END IF;
+        RETURN NEW;
+    ELSIF TG_OP = 'DELETE' THEN
+        IF (SELECT COUNT(*) FROM clinics) <= 1 THEN
+            RAISE EXCEPTION 'The last clinic record cannot be deleted.';
+        END IF;
+        RETURN OLD;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+_CLINIC_SINGLETON_TRIGGER_SQL = """
+DROP TRIGGER IF EXISTS trg_single_clinic ON clinics;
+CREATE TRIGGER trg_single_clinic
+BEFORE INSERT OR UPDATE OR DELETE ON clinics
+FOR EACH ROW EXECUTE FUNCTION enforce_single_clinic();
+"""
+
 
 def ensure_clinic_table():
     """Create the clinics table and add missing columns if needed.
@@ -79,17 +109,33 @@ def ensure_clinic_table():
 
 
 def ensure_single_clinic():
-    """Seed a default clinic record if the clinics table is empty.
+    """Enforce exactly one clinic record (single-clinic architecture).
 
-    Safe to call on every startup (no-op when a clinic already exists).
+    - 0 clinics : seed a default clinic record.
+    - 1 clinic  : ensure the singleton trigger exists (no-op).
+    - >1 clinics: one-time repair - retain the earliest clinic (lowest id,
+      the primary clinic in this system), reassign every doctor and
+      appointment to it, delete the duplicate clinic records, then install
+      the singleton trigger.
+
+    The trigger is the database-level protection: once installed, a second
+    clinic record cannot be inserted (and the last record cannot be
+    deleted, and the id cannot change). After this cleanup the merge branch
+    is effectively dead code, because the trigger prevents new duplicates.
+
+    Retained clinic is chosen as MIN(id), which in this system is the
+    original clinic referenced by all real doctors and appointments.
     """
     with engine.begin() as conn:
 
-        count = conn.execute(
-            text("SELECT COUNT(*) FROM clinics")
-        ).scalar()
+        clinic_ids = [
+            row[0]
+            for row in conn.execute(
+                text("SELECT id FROM clinics ORDER BY id")
+            )
+        ]
 
-        if count == 0:
+        if not clinic_ids:
 
             conn.execute(
                 text(
@@ -97,6 +143,39 @@ def ensure_single_clinic():
                     "('My Clinic', 'Default clinic record')"
                 )
             )
+
+        elif len(clinic_ids) > 1:
+
+            retain_id = clinic_ids[0]
+
+            conn.execute(
+                text(
+                    "UPDATE doctors SET clinic_id = :clinic_id "
+                    "WHERE clinic_id IS NOT NULL "
+                    "AND clinic_id <> :clinic_id"
+                ),
+                {"clinic_id": retain_id},
+            )
+
+            conn.execute(
+                text(
+                    "UPDATE appointments SET clinic_id = :clinic_id "
+                    "WHERE clinic_id IS NOT NULL "
+                    "AND clinic_id <> :clinic_id"
+                ),
+                {"clinic_id": retain_id},
+            )
+
+            conn.execute(
+                text(
+                    "DELETE FROM clinics WHERE id <> :clinic_id"
+                ),
+                {"clinic_id": retain_id},
+            )
+
+        conn.execute(text(_CLINIC_SINGLETON_FUNCTION_SQL))
+
+        conn.execute(text(_CLINIC_SINGLETON_TRIGGER_SQL))
 
 
 def ensure_doctor_clinic_assignment():
@@ -116,16 +195,10 @@ def ensure_doctor_clinic_assignment():
 
             clinic_id = conn.execute(
                 text(
-                    "SELECT id FROM clinics WHERE active = 'YES' "
+                    "SELECT id FROM clinics "
                     "ORDER BY id LIMIT 1"
                 )
             ).scalar()
-
-            if clinic_id is None:
-
-                clinic_id = conn.execute(
-                    text("SELECT id FROM clinics ORDER BY id LIMIT 1")
-                ).scalar()
 
             if clinic_id is not None:
 
@@ -276,6 +349,67 @@ def ensure_doctor_day_off_table():
                 )
 
 
+_CLINIC_DAY_OFF_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS clinic_day_offs (
+    id SERIAL PRIMARY KEY,
+    date DATE NOT NULL,
+    reason VARCHAR(255),
+    CONSTRAINT uq_clinic_day_off UNIQUE (date)
+)
+"""
+
+
+def ensure_clinic_day_off_table():
+    """Create the clinic_day_offs table and ensure the unique constraint.
+
+    Safe to call on every startup:
+    - CREATE TABLE IF NOT EXISTS is a no-op when the table already exists.
+    - Adds the (date) unique constraint if missing so the clinic cannot
+      have the same day off twice.
+    - Drops the legacy clinic_id column (the app is single-clinic and
+      day-offs are clinic-wide), keeping the table in sync with the model.
+    """
+    with engine.begin() as conn:
+
+        if "clinic_day_offs" not in inspect(conn).get_table_names():
+
+            conn.execute(text(_CLINIC_DAY_OFF_TABLE_SQL))
+
+        else:
+
+            columns = {
+                column["name"]
+                for column in inspect(conn).get_columns("clinic_day_offs")
+            }
+
+            if "clinic_id" in columns:
+
+                conn.execute(
+                    text(
+                        "ALTER TABLE clinic_day_offs DROP COLUMN clinic_id"
+                    )
+                )
+
+            constraints = {
+                row[0]
+                for row in conn.execute(
+                    text(
+                        "SELECT conname FROM pg_constraint "
+                        "WHERE conrelid = 'clinic_day_offs'::regclass"
+                    )
+                )
+            }
+
+            if "uq_clinic_day_off" not in constraints:
+
+                conn.execute(
+                    text(
+                        "ALTER TABLE clinic_day_offs ADD CONSTRAINT "
+                        "uq_clinic_day_off UNIQUE (date)"
+                    )
+                )
+
+
 if __name__ == "__main__":
 
     ensure_reminder_columns()
@@ -290,9 +424,12 @@ if __name__ == "__main__":
 
     ensure_doctor_day_off_table()
 
+    ensure_clinic_day_off_table()
+
     print("Reminder columns ensured.")
     print("Clinic table ensured.")
     print("Clinic seed ensured.")
     print("Doctor clinic assignment ensured.")
     print("Doctor schedule table ensured.")
     print("Doctor day-off table ensured.")
+    print("Clinic day-off table ensured.")

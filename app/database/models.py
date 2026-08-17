@@ -174,6 +174,24 @@ class DoctorDayOff(Base):
     reason = Column(String(255))
 
 
+class ClinicDayOff(Base):
+
+    __tablename__ = "clinic_day_offs"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "date",
+            name="uq_clinic_day_off",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    date = Column(Date, nullable=False)
+
+    reason = Column(String(255))
+
+
 class DoctorSchedule(Base):
 
     __tablename__ = "doctor_schedules"

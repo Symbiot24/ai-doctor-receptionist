@@ -2,6 +2,7 @@ from datetime import datetime
 from datetime import timedelta
 
 from app.repositories.appointment_repository import AppointmentRepository
+from app.services.clinic_day_off_service import ClinicDayOffService
 from app.services.doctor_day_off_service import DoctorDayOffService
 from app.services.doctor_service import DoctorService
 from app.services.doctor_schedule_service import DoctorScheduleService
@@ -15,12 +16,13 @@ class SlotService:
 
     1. Doctor exists
     2. Doctor is active
-    3. Weekly schedule exists for the weekday (or legacy shifts)
-    4. That weekday is enabled
-    5. The requested date is not a doctor day-off
-    6. Time falls inside a morning/evening shift boundary
-    7. Existing BOOKED appointments are excluded (CANCELLED never blocks)
-    8. Slot duration is respected (no slot that overruns a shift)
+    3. The requested date is not a clinic day-off
+    4. Weekly schedule exists for the weekday (or legacy shifts)
+    5. That weekday is enabled
+    6. The requested date is not a doctor day-off
+    7. Time falls inside a morning/evening shift boundary
+    8. Existing BOOKED appointments are excluded (CANCELLED never blocks)
+    9. Slot duration is respected (no slot that overruns a shift)
     """
 
     SLOT_DURATION = 30
@@ -38,6 +40,8 @@ class SlotService:
         self.schedule_service = DoctorScheduleService(db)
 
         self.day_off_service = DoctorDayOffService(db)
+
+        self.clinic_day_off_service = ClinicDayOffService(db)
 
     # ---------------- Helpers ---------------- #
 
@@ -122,8 +126,14 @@ class SlotService:
         """Return the active (start, end) shift windows for the date.
 
         Returns an empty list when the doctor has no availability that day
-        (day-off, disabled weekday, or no schedule/shifts configured).
+        (clinic day-off, doctor day-off, disabled weekday, or no
+        schedule/shifts configured).
         """
+        if self.clinic_day_off_service.is_day_off(
+            appointment_date,
+        ):
+            return []
+
         if self.day_off_service.is_day_off(
             doctor.id,
             appointment_date,
@@ -185,6 +195,29 @@ class SlotService:
         return slots
 
     # ---------------- Public API ---------------- #
+
+    def available_slots_for_id(
+        self,
+        doctor_id,
+        appointment_date,
+        exclude_appointment_id=None,
+    ):
+        """Resolve the doctor by id then delegate to available_slots().
+
+        Keeps SlotService the single source of truth while letting the
+        admin API address doctors by id. A deactivated doctor resolves to
+        no availability (find_by_name only matches active doctors).
+        """
+        doctor = self.doctor_service.get_by_id(doctor_id)
+
+        if doctor is None:
+            return []
+
+        return self.available_slots(
+            doctor.name,
+            appointment_date,
+            exclude_appointment_id=exclude_appointment_id,
+        )
 
     def available_slots(
         self,

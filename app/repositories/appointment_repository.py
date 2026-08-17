@@ -3,8 +3,8 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.database.models import Appointment
-from app.database.models import Clinic
 from app.database.models import Doctor
+from app.services.clinic_service import get_current_clinic
 
 
 class AppointmentRepository:
@@ -33,25 +33,9 @@ class AppointmentRepository:
 
             return doctor.clinic_id
 
-        clinic = (
-            self.db.query(Clinic)
-            .filter(
-                Clinic.active == "YES"
-            )
-            .first()
-        )
-
-        if clinic is None:
-
-            clinic = self.db.query(Clinic).first()
-
-        if clinic is None:
-
-            raise ValueError(
-                "No clinic record found. Run the clinic migration/seed first."
-            )
-
-        return clinic.id
+        # Single-clinic system: fall back to the one clinic record.
+        # Fails clearly if zero or multiple clinics exist.
+        return get_current_clinic(self.db).id
 
     def create(
         self,

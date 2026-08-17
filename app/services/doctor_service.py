@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from app.database.models import Clinic
 from app.repositories.doctor_repository import DoctorRepository
+from app.services.clinic_service import get_current_clinic
 from app.services.doctor_validator import DoctorValidator
 
 
@@ -45,25 +45,9 @@ class DoctorService:
 
     def _default_clinic_id(self):
 
-        clinic = (
-            self.db.query(Clinic)
-            .filter(
-                Clinic.active == "YES"
-            )
-            .first()
-        )
-
-        if clinic is None:
-
-            clinic = self.db.query(Clinic).first()
-
-        if clinic is None:
-
-            raise ValueError(
-                "No clinic record found. Run the clinic migration/seed first."
-            )
-
-        return clinic.id
+        # Single-clinic system: always the one clinic. Fails clearly if
+        # zero or multiple clinics exist instead of picking one silently.
+        return get_current_clinic(self.db).id
 
     # ---------------- Create ---------------- #
 
@@ -156,6 +140,10 @@ class DoctorService:
     def get_active(self):
 
         return self.repository.get_active()
+
+    def get_all_including_inactive(self):
+
+        return self.repository.get_all_including_inactive()
 
     def get_by_id(
         self,
