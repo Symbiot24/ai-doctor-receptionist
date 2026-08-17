@@ -51,8 +51,9 @@ def dashboard_summary(db: Session = Depends(get_db)):
     # (inactive, day-off, disabled weekday, or no configured shifts).
     unavailable_doctors = sum(
         1
-        for doctor in active_doctors
-        if not slot_service.available_slots_for_id(doctor.id, today)
+        for doctor in all_doctors
+        if doctor.active != "YES"
+        or not slot_service.available_slots_for_id(doctor.id, today)
     )
 
     return DashboardSummary(
