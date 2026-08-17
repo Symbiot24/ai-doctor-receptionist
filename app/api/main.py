@@ -67,6 +67,11 @@ async def unhandled_exception_handler(
         content={"detail": "Internal server error."},
     )
 
+@app.get("/health")
+def health():
+    return {
+        "status": "ok"
+    }
 
 if __name__ == "__main__":
 

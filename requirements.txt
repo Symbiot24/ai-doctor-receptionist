@@ -1,1 +1,11 @@
 argon2-cffi>=25.1.0
+fastapi>=0.141.1
+groq>=1.6.0
+httpx>=0.28.1
+psycopg2>=2.9.12
+PyJWT>=2.13.0
+pydantic>=2.13.4
+python-dotenv>=1.2.2
+python-telegram-bot>=22.8
+SQLAlchemy>=2.0.51
+uvicorn>=0.52.3
