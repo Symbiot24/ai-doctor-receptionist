@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin
 from app.api.deps import get_db
 from app.api.schemas.dashboard import DashboardSummary
 from app.database.models import Appointment
@@ -13,6 +14,7 @@ from app.services.slot_service import SlotService
 router = APIRouter(
     prefix="/api/dashboard",
     tags=["dashboard"],
+    dependencies=[Depends(get_current_admin)],
 )
 
 

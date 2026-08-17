@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from fastapi import Response
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin
 from app.api.deps import get_db
 from app.api.schemas.day_off import DayOffCreate
 from app.api.schemas.day_off import DayOffResponse
@@ -14,6 +15,7 @@ from app.services.doctor_service import DoctorService
 router = APIRouter(
     prefix="/api/doctors/{doctor_id}/day-offs",
     tags=["day-offs"],
+    dependencies=[Depends(get_current_admin)],
 )
 
 

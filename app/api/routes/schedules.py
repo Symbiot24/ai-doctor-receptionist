@@ -3,6 +3,7 @@ from fastapi import Depends
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin
 from app.api.deps import get_db
 from app.api.schemas.schedule import ScheduleDayResponse
 from app.api.schemas.schedule import ScheduleUpdate
@@ -12,6 +13,7 @@ from app.services.doctor_service import DoctorService
 router = APIRouter(
     prefix="/api/doctors/{doctor_id}/schedule",
     tags=["schedules"],
+    dependencies=[Depends(get_current_admin)],
 )
 
 WEEKDAYS = DoctorScheduleService.WEEKDAYS

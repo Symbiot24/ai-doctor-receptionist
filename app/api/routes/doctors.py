@@ -3,6 +3,7 @@ from fastapi import Depends
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin
 from app.api.deps import get_db
 from app.api.schemas.doctor import DoctorCreate
 from app.api.schemas.doctor import DoctorResponse
@@ -12,6 +13,7 @@ from app.services.doctor_service import DoctorService
 router = APIRouter(
     prefix="/api/doctors",
     tags=["doctors"],
+    dependencies=[Depends(get_current_admin)],
 )
 
 

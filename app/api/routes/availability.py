@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from fastapi import Query
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin
 from app.api.deps import get_db
 from app.api.schemas.availability import AvailabilityResponse
 from app.services.doctor_service import DoctorService
@@ -13,6 +14,7 @@ from app.services.slot_service import SlotService
 router = APIRouter(
     prefix="/api/doctors/{doctor_id}/availability",
     tags=["availability"],
+    dependencies=[Depends(get_current_admin)],
 )
 
 

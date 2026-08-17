@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import CORS_ORIGINS
+from app.api.routes import auth
 from app.api.routes import availability
 from app.api.routes import appointments
 from app.api.routes import clinic
@@ -43,6 +44,7 @@ app.include_router(day_offs.router)
 app.include_router(availability.router)
 app.include_router(appointments.router)
 app.include_router(dashboard.router)
+app.include_router(auth.router)
 
 
 @app.exception_handler(Exception)

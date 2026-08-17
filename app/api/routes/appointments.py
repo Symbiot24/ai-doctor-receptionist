@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from fastapi import Query
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin
 from app.api.deps import get_db
 from app.api.schemas.appointment import AppointmentResponse
 from app.api.schemas.appointment import RescheduleInput
@@ -17,6 +18,7 @@ from app.services.slot_service import SlotService
 router = APIRouter(
     prefix="/api/appointments",
     tags=["appointments"],
+    dependencies=[Depends(get_current_admin)],
 )
 
 

@@ -19,3 +19,16 @@ CORS_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+
+# ---------------- JWT Auth (clinic admin) ---------------- #
+
+# Secret used to sign admin access tokens. MUST be set in the environment
+# (never hardcoded). Generate one with:
+#   python -c "import secrets; print(secrets.token_urlsafe(48))"
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "60")
+)

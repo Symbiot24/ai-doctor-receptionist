@@ -12,6 +12,49 @@ from sqlalchemy.sql import func
 from app.database.db import Base
 
 
+class AdminUser(Base):
+
+    __tablename__ = "admin_users"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "email",
+            name="uq_admin_users_email",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    email = Column(
+        String(255),
+        nullable=False,
+    )
+
+    password_hash = Column(
+        String(255),
+        nullable=False,
+    )
+
+    name = Column(String(100))
+
+    is_active = Column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class Appointment(Base):
 
     __tablename__ = "appointments"

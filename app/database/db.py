@@ -1,4 +1,5 @@
 import socket
+import time
 from urllib.parse import urlsplit
 
 from sqlalchemy import create_engine
@@ -19,18 +20,43 @@ _host = _parsed.hostname
 
 _port = _parsed.port or 5432
 
+
+def _resolve_ipv4(host, port):
+
+    # Transient DNS failures must not take the whole app down at import
+    # time. Retry briefly, then give up and let libpq resolve at connect
+    # time (which reports a proper connection error instead of crashing).
+    for attempt in range(3):
+
+        try:
+
+            infos = socket.getaddrinfo(
+                host,
+                port,
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+            )
+
+            if infos:
+
+                return infos[0][4][0]
+
+        except socket.gaierror:
+
+            if attempt < 2:
+
+                time.sleep(1)
+
+    return None
+
+
 if _host:
 
-    for _info in socket.getaddrinfo(
-        _host,
-        _port,
-        socket.AF_INET,
-        socket.SOCK_STREAM,
-    ):
+    ipv4 = _resolve_ipv4(_host, _port)
 
-        _connect_args["hostaddr"] = _info[4][0]
+    if ipv4:
 
-        break
+        _connect_args["hostaddr"] = ipv4
 
 engine = create_engine(
     DATABASE_URL,

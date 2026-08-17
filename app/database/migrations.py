@@ -410,6 +410,84 @@ def ensure_clinic_day_off_table():
                 )
 
 
+_ADMIN_USERS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS admin_users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(100),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT uq_admin_users_email UNIQUE (email)
+)
+"""
+
+
+def ensure_admin_users_table():
+    """Create the admin_users table and enforce unique admin emails.
+
+    Safe to call on every startup:
+    - CREATE TABLE IF NOT EXISTS is a no-op when the table already exists.
+    - Adds the (email) unique constraint if missing.
+    - Adds missing columns if the table pre-exists without them.
+    - Adds a case-insensitive unique index so the same email cannot be
+      registered twice with different casing (admin@x.com vs Admin@x.com).
+    """
+    with engine.begin() as conn:
+
+        if "admin_users" not in inspect(conn).get_table_names():
+
+            conn.execute(text(_ADMIN_USERS_TABLE_SQL))
+
+        else:
+
+            columns = {
+                column["name"]
+                for column in inspect(conn).get_columns("admin_users")
+            }
+
+            for column, column_type in (
+                ("password_hash", "VARCHAR(255) NOT NULL"),
+                ("is_active", "BOOLEAN NOT NULL DEFAULT TRUE"),
+            ):
+
+                if column not in columns:
+
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE admin_users ADD COLUMN "
+                            f"{column} {column_type}"
+                        )
+                    )
+
+            constraints = {
+                row[0]
+                for row in conn.execute(
+                    text(
+                        "SELECT conname FROM pg_constraint "
+                        "WHERE conrelid = 'admin_users'::regclass"
+                    )
+                )
+            }
+
+            if "uq_admin_users_email" not in constraints:
+
+                conn.execute(
+                    text(
+                        "ALTER TABLE admin_users ADD CONSTRAINT "
+                        "uq_admin_users_email UNIQUE (email)"
+                    )
+                )
+
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_users_email_ci "
+                "ON admin_users (lower(email))"
+            )
+        )
+
+
 if __name__ == "__main__":
 
     ensure_reminder_columns()
@@ -426,6 +504,8 @@ if __name__ == "__main__":
 
     ensure_clinic_day_off_table()
 
+    ensure_admin_users_table()
+
     print("Reminder columns ensured.")
     print("Clinic table ensured.")
     print("Clinic seed ensured.")
@@ -433,3 +513,4 @@ if __name__ == "__main__":
     print("Doctor schedule table ensured.")
     print("Doctor day-off table ensured.")
     print("Clinic day-off table ensured.")
+    print("Admin users table ensured.")

@@ -3,6 +3,7 @@ from fastapi import Depends
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin
 from app.api.deps import get_db
 from app.api.schemas.clinic import ClinicResponse
 from app.api.schemas.clinic import ClinicUpdate
@@ -11,6 +12,7 @@ from app.services.clinic_service import ClinicService
 router = APIRouter(
     prefix="/api/clinic",
     tags=["clinic"],
+    dependencies=[Depends(get_current_admin)],
 )
 
 
