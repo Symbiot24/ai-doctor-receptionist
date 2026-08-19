@@ -246,6 +246,76 @@ class SlotService:
 
         return self._generate(shifts, booked)
 
+    def unavailability_reason(
+        self,
+        doctor_name,
+        appointment_date,
+        exclude_appointment_id=None,
+    ):
+        """Explain why a date has no available slots for a doctor.
+
+        Returns a human-readable reason string, or ``None`` when the date
+        actually has available slots. Used by the booking/reschedule flows
+        to give users a specific explanation (clinic closed, doctor on
+        leave, day off, etc.) instead of a generic "no slots" message.
+        """
+        appointment_date = self._to_date(appointment_date)
+
+        doctor = self.doctor_service.find_by_name(doctor_name)
+
+        if doctor is None:
+            return f"❌ No doctor found named '{doctor_name}'."
+
+        day_label = appointment_date.strftime("%A, %d %B %Y")
+
+        if self.clinic_day_off_service.is_day_off(appointment_date):
+            return (
+                f"❌ The clinic is closed on {day_label}.\n"
+                "Please choose another date."
+            )
+
+        if self.day_off_service.is_day_off(doctor.id, appointment_date):
+            return (
+                f"❌ {doctor.name} is on leave on {day_label}.\n"
+                "Please choose another date."
+            )
+
+        day_of_week = appointment_date.weekday()
+
+        schedule = self.schedule_service.get_day_schedule(
+            doctor.id,
+            day_of_week,
+        )
+
+        if schedule is not None and not schedule.enabled:
+            return (
+                f"❌ {doctor.name} is not available on "
+                f"{appointment_date.strftime('%A')}.\n"
+                "Please choose another date."
+            )
+
+        shifts = self._resolve_shifts(doctor, appointment_date)
+
+        if not shifts:
+            return (
+                f"❌ {doctor.name} has no consultation hours on {day_label}.\n"
+                "Please choose another date."
+            )
+
+        booked = self.repository.get_booked_slots(
+            doctor_name,
+            appointment_date,
+            exclude_appointment_id=exclude_appointment_id,
+        )
+
+        if not self._generate(shifts, booked):
+            return (
+                f"❌ All slots are already booked on {day_label}.\n"
+                "Please choose another date."
+            )
+
+        return None
+
     def is_slot_available(
         self,
         doctor_name,

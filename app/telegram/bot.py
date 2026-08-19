@@ -117,7 +117,7 @@ async def chat(
                 if not appointments:
 
                     reply = (
-                        "📭 You don't have any upcoming appointments."
+                        "You don't have any upcoming appointments."
                     )
 
                 else:
@@ -159,7 +159,7 @@ async def chat(
 
                 if not appointments:
 
-                    reply = "📭 You don't have any appointments."
+                    reply = "You don't have any appointments."
 
                 else:
 
@@ -198,7 +198,7 @@ async def chat(
 
                 if not appointments:
 
-                    reply = "📭 You don't have any appointments."
+                    reply = "You don't have any appointments."
 
                 else:
 

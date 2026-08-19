@@ -225,6 +225,10 @@ class BookingFlow:
                                 data["doctor"],
                                 data["appointment_date"],
                             )
+                            reason = slot_service.unavailability_reason(
+                                data["doctor"],
+                                data["appointment_date"],
+                            )
                         finally:
                             db.close()
                         
@@ -240,7 +244,7 @@ class BookingFlow:
                             # No slots available, ask for different date
                             state_manager.update_state(user_id, BookingState.ASK_DATE)
                             state = BookingState.ASK_DATE
-                            return (
+                            return reason or (
                                 "❌ No slots available for this date.\n"
                                 "Please choose another date."
                             )
@@ -305,7 +309,7 @@ class BookingFlow:
                 BookingState.ASK_NAME,
             )
             return (
-                "🏥 Let's book your appointment.\n\n"
+                "Let's book your appointment.\n\n"
                 "What is your full name?"
             )
 
@@ -321,7 +325,7 @@ class BookingFlow:
                 user_id,
                 BookingState.ASK_PHONE,
             )
-            return "📞 Please enter your phone number."
+            return "Please enter your phone number."
 
         # ---------------- Age ----------------
         if entities.get("age"):
@@ -335,7 +339,7 @@ class BookingFlow:
                 user_id,
                 BookingState.ASK_AGE,
             )
-            return "🎂 What is your age?"
+            return "What is your age?"
 
         # ---------------- Gender ----------------
         if entities.get("gender"):
@@ -349,7 +353,7 @@ class BookingFlow:
                 user_id,
                 BookingState.ASK_GENDER,
             )
-            return "👤 What is your gender?"
+            return "What is your gender?"
 
         # ---------------- Symptoms ----------------
         if entities.get("symptoms"):
@@ -363,7 +367,7 @@ class BookingFlow:
                 user_id,
                 BookingState.ASK_SYMPTOMS,
             )
-            return "🩺 Please describe your symptoms."
+            return "Please describe your symptoms."
 
         # ---------------- Doctor ----------------
         if entities.get("doctor"):
@@ -391,29 +395,29 @@ class BookingFlow:
             finally:
                 db.close()
             return (
-                "👨‍⚕️ Please select a doctor:",
+                "Please select a doctor:",
                 doctor_keyboard(doctors),
             )
 
         # ---------------- Appointment Date ----------------
         if entities.get("appointment_date"):
-            # Validate date format
-            date_str = entities["appointment_date"]
-            try:
-                appointment_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                session_memory.save(user_id, "appointment_date", appointment_date)
-            except ValueError:
+            # Validate date (natural language and standard formats allowed)
+            appointment_date, error = BookingValidator.parse_and_validate_date(
+                entities["appointment_date"]
+            )
+            if error:
                 state_manager.update_state(
                     user_id,
                     BookingState.ASK_DATE,
                 )
-                return "Please enter appointment date (YYYY-MM-DD)."
+                return error
+            session_memory.save(user_id, "appointment_date", appointment_date)
         else:
             state_manager.update_state(
                 user_id,
                 BookingState.ASK_DATE,
             )
-            return "Preferred appointment date? (YYYY-MM-DD)"
+            return "Preferred appointment date? (e.g. tomorrow or 26 August)"
 
         # ---------------- Appointment Time ----------------
         if entities.get("appointment_time"):
@@ -472,7 +476,7 @@ class BookingFlow:
                 BookingState.ASK_PHONE,
             )
 
-            return "📞 Please enter your phone number."
+            return "Please enter your phone number."
 
         # ---------------- ASK PHONE ---------------- #
 
@@ -494,7 +498,7 @@ class BookingFlow:
                 BookingState.ASK_AGE,
             )
 
-            return "🎂 What is your age?"
+            return "What is your age?"
 
         # ---------------- ASK AGE ---------------- #
 
@@ -516,7 +520,7 @@ class BookingFlow:
                 BookingState.ASK_GENDER,
             )
 
-            return "👤 What is your gender?"
+            return "What is your gender?"
 
         # ---------------- ASK GENDER ---------------- #
 
@@ -538,7 +542,7 @@ class BookingFlow:
                 BookingState.ASK_SYMPTOMS,
             )
 
-            return "🩺 Please describe your symptoms."
+            return "Please describe your symptoms."
 
         # ---------------- ASK SYMPTOMS ---------------- #
 
@@ -564,7 +568,7 @@ class BookingFlow:
             db.close()
 
             return (
-                "👨‍⚕️ Please select a doctor:",
+                "Please select a doctor:",
                 doctor_keyboard(doctors),
             )
 
@@ -585,7 +589,7 @@ class BookingFlow:
             if doctor is None:
 
                 return (
-                    "❌ Doctor not found.\n\n"
+                    "Doctor not found.\n\n"
                     "Please enter one of the available doctors."
                 )
 
@@ -600,22 +604,19 @@ class BookingFlow:
                 BookingState.ASK_DATE,
             )
 
-            return "📅 Preferred appointment date? (YYYY-MM-DD)"
+            return "Preferred appointment date? (e.g. tomorrow or 26 August)"
 
 
         # ---------------- RESCHEDULE DATE ---------------- #
 
         if state == BookingState.ASK_RESCHEDULE_DATE:
 
-            valid, error = BookingValidator.validate_date(message)
+            appointment_date, error = BookingValidator.parse_and_validate_date(
+                message
+            )
 
-            if not valid:
+            if error:
                 return error
-
-            appointment_date = datetime.strptime(
-                message,
-                "%Y-%m-%d",
-            ).date()
 
             session_memory.save(
                 user_id,
@@ -637,7 +638,7 @@ class BookingFlow:
 
                 state_manager.reset(user_id)
 
-                return "❌ Appointment not found or access denied."
+                return "Appointment not found or access denied."
 
             session_memory.save(
                 user_id,
@@ -653,14 +654,22 @@ class BookingFlow:
                 exclude_appointment_id=appointment.id,
             )
 
-            db.close()
-
             if not slots:
 
-                return (
-                    "❌ No slots available.\n\n"
+                reason = slot_service.unavailability_reason(
+                    appointment.doctor,
+                    appointment_date,
+                    exclude_appointment_id=appointment.id,
+                )
+
+                db.close()
+
+                return reason or (
+                    "No slots available.\n\n"
                     "Please choose another date."
                 )
+
+            db.close()
 
             state_manager.update_state(
                 user_id,
@@ -668,7 +677,7 @@ class BookingFlow:
             )
 
             return (
-                "🕒 Select a new slot:",
+                "Select a new slot:",
                 slot_keyboard(slots),
             )
 
@@ -676,15 +685,12 @@ class BookingFlow:
 
         if state == BookingState.ASK_DATE:
 
-            valid, error = BookingValidator.validate_date(message)
+            appointment_date, error = BookingValidator.parse_and_validate_date(
+                message
+            )
 
-            if not valid:
+            if error:
                 return error
-
-            appointment_date = datetime.strptime(
-                message,
-                "%Y-%m-%d",
-            ).date()
 
             session_memory.save(
                 user_id,
@@ -692,23 +698,32 @@ class BookingFlow:
                 appointment_date,
             )
 
+            doctor_name = session_memory.get(user_id)["doctor"]
+
             db = SessionLocal()
 
             slot_service = SlotService(db)
 
             slots = slot_service.available_slots(
-                session_memory.get(user_id)["doctor"],
+                doctor_name,
                 appointment_date,
             )
 
-            db.close()
-
             if not slots:
 
-                return (
-                    "❌ No slots available.\n"
+                reason = slot_service.unavailability_reason(
+                    doctor_name,
+                    appointment_date,
+                )
+
+                db.close()
+
+                return reason or (
+                    "No slots available.\n"
                     "Choose another date."
                 )
+
+            db.close()
 
             state_manager.update_state(
                 user_id,
@@ -716,7 +731,7 @@ class BookingFlow:
             )
 
             return (
-                "🕒 Please select an available slot:",
+                "Please select an available slot:",
                 slot_keyboard(slots),
             )
 
@@ -768,7 +783,7 @@ class BookingFlow:
 
                 state_manager.reset(user_id)
 
-                return "❌ Appointment cancelled."
+                return "Appointment cancelled."
 
             data = session_memory.get(user_id)
 
@@ -794,7 +809,7 @@ class BookingFlow:
                 )
 
                 return (
-                    "❌ This slot is not available.\n\n"
+                    "This slot is not available.\n\n"
                     "Please enter another appointment time."
                 )
 
@@ -816,7 +831,7 @@ class BookingFlow:
                 )
 
                 return (
-                    f"❌ {error}\n\n"
+                    f"{error}\n\n"
                     "Please enter another appointment time."
                 )
 
@@ -825,7 +840,7 @@ class BookingFlow:
             state_manager.reset(user_id)
 
             return (
-                "✅ Appointment booked successfully!\n\n"
+                "Appointment booked successfully!\n\n"
                 f"Appointment ID: {appointment.id}"
             )
 
@@ -844,7 +859,7 @@ class BookingFlow:
             BookingState.ASK_DATE,
         )
 
-        return "📅 Select your preferred appointment date (YYYY-MM-DD)."
+        return "Select your preferred appointment date (e.g. tomorrow or 26 August)."
 
 
     def select_slot(self, user_id: int, slot: str):
@@ -894,8 +909,8 @@ class BookingFlow:
         )
 
         return (
-            "📅 Enter your new appointment date.\n\n"
-            "Format: YYYY-MM-DD"
+            "Enter your new appointment date.\n\n"
+            "For example: tomorrow, 26 August or 2026-08-26"
         )
 
 
@@ -936,7 +951,7 @@ class BookingFlow:
             db.close()
 
             return (
-                "❌ This slot is not available.\n"
+                "This slot is not available.\n"
                 "Please choose another slot."
             )
 
@@ -953,7 +968,7 @@ class BookingFlow:
             db.close()
 
             return (
-                f"❌ {error}\n"
+                f"{error}\n"
                 "Please choose another slot."
             )
 
@@ -962,7 +977,7 @@ class BookingFlow:
         state_manager.reset(user_id)
 
         return (
-            "✅ Appointment Rescheduled Successfully.\n\n"
-            f"📅 Date: {appointment.appointment_date}\n"
-            f"🕒 Time: {appointment.appointment_time.strftime('%H:%M')}"
+            "Appointment Rescheduled Successfully.\n\n"
+            f"Date: {appointment.appointment_date}\n"
+            f"Time: {appointment.appointment_time.strftime('%H:%M')}"
         )
