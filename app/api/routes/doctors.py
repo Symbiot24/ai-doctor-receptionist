@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
@@ -9,6 +11,7 @@ from app.api.schemas.doctor import DoctorCreate
 from app.api.schemas.doctor import DoctorResponse
 from app.api.schemas.doctor import DoctorUpdate
 from app.services.doctor_service import DoctorService
+from app.services.slot_service import SlotService
 
 router = APIRouter(
     prefix="/api/doctors",
@@ -31,12 +34,48 @@ def _get_or_404(db, doctor_id):
     return doctor
 
 
+def _with_availability(doctor, slot_service):
+    """Attach today's availability to a DoctorResponse.
+
+    ``active`` reflects availability for today: a doctor who is active in
+    the system but off today (day-off or disabled weekday) is reported as
+    inactive for the day. ``is_active`` keeps the raw system status.
+    """
+    available_today, reason = slot_service.availability_status(
+        doctor,
+        date.today(),
+    )
+
+    is_active = doctor.active == "YES"
+
+    response = DoctorResponse.model_validate(doctor)
+
+    response.is_active = doctor.active
+
+    response.available_today = available_today
+
+    response.unavailable_reason = reason
+
+    response.active = "YES" if (is_active and available_today) else "NO"
+
+    return response
+
+
 @router.get("", response_model=list[DoctorResponse])
 def list_doctors(db: Session = Depends(get_db)):
 
     # Admin-facing full roster (includes deactivated doctors so the
     # frontend can reactivate them).
-    return DoctorService(db).get_all_including_inactive()
+    doctor_service = DoctorService(db)
+
+    slot_service = SlotService(db)
+
+    doctors = doctor_service.get_all_including_inactive()
+
+    return [
+        _with_availability(doctor, slot_service)
+        for doctor in doctors
+    ]
 
 
 @router.get("/{doctor_id}", response_model=DoctorResponse)
@@ -45,7 +84,12 @@ def get_doctor(
     db: Session = Depends(get_db),
 ):
 
-    return _get_or_404(db, doctor_id)
+    doctor = _get_or_404(db, doctor_id)
+
+    return _with_availability(
+        doctor,
+        SlotService(db),
+    )
 
 
 @router.post("", response_model=DoctorResponse, status_code=201)

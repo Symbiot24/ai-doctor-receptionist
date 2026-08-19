@@ -34,13 +34,20 @@ def get_availability(
             detail="Doctor not found.",
         )
 
-    slots = SlotService(db).available_slots_for_id(
-        doctor_id,
+    slot_service = SlotService(db)
+
+    available, reason = slot_service.availability_status(
+        doctor,
         date,
     )
 
     return AvailabilityResponse(
         date=date,
         doctor_id=doctor_id,
-        slots=slots,
+        slots=slot_service.available_slots_for_id(
+            doctor_id,
+            date,
+        ),
+        available=available,
+        reason=reason,
     )

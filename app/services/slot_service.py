@@ -152,12 +152,18 @@ class SlotService:
             if not schedule.enabled:
                 return []
 
-            return self._filter_shifts(
+            schedule_shifts = self._filter_shifts(
                 [
                     (schedule.morning_start, schedule.morning_end),
                     (schedule.evening_start, schedule.evening_end),
                 ]
             )
+
+            # An enabled schedule should always be bookable. If it has no
+            # shift times configured, fall back to the doctor's own shifts
+            # (or the defaults) instead of silently producing no slots.
+            if schedule_shifts:
+                return schedule_shifts
 
         shifts = self._filter_shifts(
             self._shifts_from_doctor(doctor)
@@ -252,7 +258,7 @@ class SlotService:
         appointment_date,
         exclude_appointment_id=None,
     ):
-        """Explain why a date has no available slots for a doctor.
+        """Explain why a doctor has no available slots on a date.
 
         Returns a human-readable reason string, or ``None`` when the date
         actually has available slots. Used by the booking/reschedule flows
@@ -266,6 +272,55 @@ class SlotService:
         if doctor is None:
             return f"❌ No doctor found named '{doctor_name}'."
 
+        return self._unavailability_reason(
+            doctor,
+            appointment_date,
+            exclude_appointment_id=exclude_appointment_id,
+        )
+
+    def availability_status(
+        self,
+        doctor,
+        appointment_date,
+        exclude_appointment_id=None,
+    ):
+        """Return ``(available, reason)`` for a doctor ORM object.
+
+        ``available`` is True when at least one slot can be booked on the
+        date. ``reason`` is a human-readable explanation when unavailable,
+        otherwise None. Unlike ``unavailability_reason`` this also handles
+        inactive doctors, so it is suitable for admin/dashboard views.
+        """
+        appointment_date = self._to_date(appointment_date)
+
+        if doctor is None:
+            return False, "Doctor not found."
+
+        if doctor.active != "YES":
+            return False, f"{doctor.name} is currently inactive."
+
+        slots = self.available_slots(
+            doctor.name,
+            appointment_date,
+            exclude_appointment_id=exclude_appointment_id,
+        )
+
+        if slots:
+            return True, None
+
+        return False, self._unavailability_reason(
+            doctor,
+            appointment_date,
+            exclude_appointment_id=exclude_appointment_id,
+        )
+
+    def _unavailability_reason(
+        self,
+        doctor,
+        appointment_date,
+        exclude_appointment_id=None,
+    ):
+        """Reason string for an existing doctor with no slots on the date."""
         day_label = appointment_date.strftime("%A, %d %B %Y")
 
         if self.clinic_day_off_service.is_day_off(appointment_date):
@@ -303,7 +358,7 @@ class SlotService:
             )
 
         booked = self.repository.get_booked_slots(
-            doctor_name,
+            doctor.name,
             appointment_date,
             exclude_appointment_id=exclude_appointment_id,
         )

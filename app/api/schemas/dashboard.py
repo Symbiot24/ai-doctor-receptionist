@@ -29,10 +29,33 @@ class DashboardAppointment(BaseModel):
         return value.strftime("%H:%M") if value else None
 
 
+class DoctorAvailability(BaseModel):
+    """Per-doctor availability snapshot so the dashboard can explain WHY a
+    doctor is or is not bookable today instead of showing contradictory
+    counts.
+
+    ``status`` is one of:
+    - "available"   -> active and has bookable slots today
+    - "unavailable" -> active but off today (day-off or disabled weekday)
+    - "inactive"    -> deactivated in the system
+    """
+
+    id: int
+    name: str
+    specialization: Optional[str] = None
+    active: str
+    is_active: Optional[str] = None
+    available_today: bool
+    status: str
+    reason: Optional[str] = None
+
+
 class DashboardSummary(BaseModel):
     total_active_doctors: int
     total_doctors: int
+    unavailable_doctors: int
+    inactive_doctors: int
     today_appointments: int
     upcoming_appointments: int
-    unavailable_doctors: int
+    doctor_availability: list[DoctorAvailability]
     upcoming_list: list[DashboardAppointment]

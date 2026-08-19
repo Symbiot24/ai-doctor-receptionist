@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin
 from app.api.deps import get_db
 from app.api.schemas.dashboard import DashboardSummary
+from app.api.schemas.dashboard import DoctorAvailability
 from app.database.models import Appointment
 from app.services.doctor_service import DoctorService
 from app.services.slot_service import SlotService
@@ -27,7 +28,9 @@ def dashboard_summary(db: Session = Depends(get_db)):
 
     all_doctors = doctor_service.get_all_including_inactive()
 
-    active_doctors = [doctor for doctor in all_doctors if doctor.active == "YES"]
+    active_doctors = [
+        doctor for doctor in all_doctors if doctor.active == "YES"
+    ]
 
     today = date.today()
 
@@ -45,22 +48,72 @@ def dashboard_summary(db: Session = Depends(get_db)):
         1 for appointment in booked if appointment.appointment_date == today
     )
 
-    upcoming = [appointment for appointment in booked if appointment.appointment_date >= today]
+    upcoming = [
+        appointment
+        for appointment in booked
+        if appointment.appointment_date >= today
+    ]
 
-    # A doctor is "unavailable today" when no bookable slot can be generated
-    # (inactive, day-off, disabled weekday, or no configured shifts).
-    unavailable_doctors = sum(
-        1
-        for doctor in all_doctors
-        if doctor.active != "YES"
-        or not slot_service.available_slots_for_id(doctor.id, today)
-    )
+    # Build an explicit per-doctor breakdown so the numbers always add up:
+    # total_active_doctors + unavailable_doctors + inactive_doctors
+    # == total_doctors. A doctor who is active in the system but off today
+    # (day-off or disabled weekday) counts as unavailable, not active.
+    doctor_availability = []
+
+    active_doctors_today = 0
+
+    unavailable_doctors = 0
+
+    for doctor in all_doctors:
+
+        available, reason = slot_service.availability_status(
+            doctor,
+            today,
+        )
+
+        is_active = doctor.active == "YES"
+
+        if not is_active:
+
+            status = "inactive"
+
+        elif available:
+
+            status = "available"
+
+        else:
+
+            status = "unavailable"
+
+        doctor_availability.append(
+            DoctorAvailability(
+                id=doctor.id,
+                name=doctor.name,
+                specialization=doctor.specialization,
+                active="YES" if (is_active and available) else "NO",
+                is_active=doctor.active,
+                available_today=available,
+                status=status,
+                reason=reason,
+            )
+        )
+
+        if is_active:
+
+            if available:
+                active_doctors_today += 1
+            else:
+                unavailable_doctors += 1
+
+    inactive_doctors = len(all_doctors) - len(active_doctors)
 
     return DashboardSummary(
-        total_active_doctors=len(active_doctors),
+        total_active_doctors=active_doctors_today,
         total_doctors=len(all_doctors),
+        unavailable_doctors=unavailable_doctors,
+        inactive_doctors=inactive_doctors,
         today_appointments=today_appointments,
         upcoming_appointments=len(upcoming),
-        unavailable_doctors=unavailable_doctors,
+        doctor_availability=doctor_availability,
         upcoming_list=upcoming[:8],
     )

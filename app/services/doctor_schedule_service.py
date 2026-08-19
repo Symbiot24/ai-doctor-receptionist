@@ -238,6 +238,84 @@ class DoctorScheduleService:
 
         return self.repository.update(schedule, data)
 
+    # ---------------- Reset ---------------- #
+
+    def reset_all_days(
+        self,
+        doctor_id,
+    ):
+        """Enable the doctor's schedule for every weekday.
+
+        Each day uses the doctor's own morning/evening shifts (or the
+        default 09:00-17:00 when the doctor has none), so that every
+        enabled day actually produces bookable slots.
+
+        Performs a single bulk commit for all 7 days to avoid many slow
+        round-trips against a remote database.
+        """
+        doctor = self.doctor_repository.get_by_id(doctor_id)
+
+        if doctor is None:
+
+            raise ValueError(f"Doctor {doctor_id} not found.")
+
+        morning = (
+            doctor.morning_start,
+            doctor.morning_end,
+        )
+
+        evening = (
+            doctor.evening_start,
+            doctor.evening_end,
+        )
+
+        if not any(morning) and not any(evening):
+
+            morning = (
+                datetime.strptime("09:00", "%H:%M").time(),
+                datetime.strptime("17:00", "%H:%M").time(),
+            )
+
+        from app.database.models import DoctorSchedule
+
+        saved = []
+
+        for day in range(7):
+
+            schedule = self.repository.get_by_doctor_and_day(
+                doctor_id,
+                day,
+            )
+
+            if schedule is None:
+
+                schedule = DoctorSchedule(
+                    doctor_id=doctor_id,
+                    day_of_week=day,
+                )
+
+                self.db.add(schedule)
+
+            schedule.enabled = True
+
+            schedule.morning_start = morning[0]
+
+            schedule.morning_end = morning[1]
+
+            schedule.evening_start = evening[0]
+
+            schedule.evening_end = evening[1]
+
+            saved.append(schedule)
+
+        self.db.commit()
+
+        for schedule in saved:
+
+            self.db.refresh(schedule)
+
+        return saved
+
     # ---------------- Delete ---------------- #
 
     def delete_day_schedule(

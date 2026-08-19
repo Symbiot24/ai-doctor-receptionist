@@ -36,10 +36,13 @@ class DoctorResponse(BaseModel):
     specialization: Optional[str] = None
     consultation_fee: Optional[int] = None
     active: Optional[str] = None
+    is_active: Optional[str] = None
     morning_start: Optional[time] = None
     morning_end: Optional[time] = None
     evening_start: Optional[time] = None
     evening_end: Optional[time] = None
+    available_today: Optional[bool] = None
+    unavailable_reason: Optional[str] = None
 
     @field_serializer(
         "morning_start",
